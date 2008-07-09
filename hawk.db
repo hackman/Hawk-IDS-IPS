@@ -1,0 +1,31 @@
+## Variant 2
+CREATE DATABASE IF NOT EXISTS hawk;
+USE hawk;
+
+CREATE TABLE IF NOT EXISTS `failed_log` (
+  `id` int(11) NOT NULL auto_increment,
+  `date` timestamp NOT NULL,
+  `ip` varchar(16) NOT NULL default '',
+  `user` varchar(16) NULL default '',
+  `service` varchar(24) NOT NULL default '',
+  PRIMARY KEY  (`id`),
+  KEY `ip` (`ip`),
+  KEY `date` (`date`),
+  KEY `service` (`service`)
+) TYPE=MyISAM ;
+
+CREATE TABLE IF NOT EXISTS `broots` (
+  `id` int(11) NOT NULL auto_increment,
+  `date` timestamp NOT NULL,
+  `ip` varchar(16) NOT NULL default '',
+  `service` varchar(24) NOT NULL default '',
+  PRIMARY KEY  (`id`),
+  KEY `ip` (`ip`),
+  KEY `date` (`date`),
+  KEY `service` (`service`)
+) TYPE=MyISAM ;
+
+GRANT USAGE ON * . * TO 'hawk'@'localhost' IDENTIFIED BY 'hawkpass' WITH MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 ;
+FLUSH PRIVILEGES;
+GRANT SELECT , INSERT , UPDATE , DELETE , REFERENCES , INDEX , ALTER ON `hawk`.`failed_log` TO 'hawk'@'localhost';GRANT SELECT , INSERT , UPDATE , DELETE , REFERENCES , INDEX , ALTER ON `hawk`.`broots` TO 'hawk'@'localhost';
+FLUSH PRIVILEGES;

@@ -1,0 +1,251 @@
+#!/bin/bash
+# Hawk init script
+# version 2.0
+hawkurl='http://master.sgvps.net/hawk/'
+pidfile='/var/run/hawk.pid'
+program='/usr/local/sbin/hawk.pl'
+check_status() {
+	check=0;
+	okcount=0;
+	for i in 1 2 3 4 5; do
+		if [ -f $pidfile ]; then
+			if [ "$1" == 0 ]; then
+				if [ -d /proc/$(cat $pidfile) ]; then
+					if [ "$okcount" -gt '1' ]; then
+						check=1;
+						continue 6;
+					fi
+					let okcount++;
+				fi
+			else
+				if [ ! -d /proc/$(cat $pidfile) ]; then
+					check=1;
+					continue 6;
+				fi
+			fi
+		else
+			if [ "$1" != 0 ]; then
+				check=1
+				continue 6
+			fi
+		fi
+		sleep 1
+	done
+	if [ $check == "1" ]; then
+		echo -e "OK"
+	else
+		echo -e "FAILED"
+	fi
+}
+# Starting Hawk
+start_program() {
+	if [ -x $program ]; then
+		if [ "$1" == 'debug' ]; then
+			$program debug
+		else
+			$program
+	    fi
+	    echo -n 'Starting Hawk: '
+	  fi
+	check_status 0
+}
+
+# Stop the Hawk
+stop_program() {
+	echo -n 'Stopping Hawk: '
+	if [ -f $pidfile ]; then
+		pid=`cat $pidfile`
+		if [ -d /proc/$pid ]; then
+	  		kill -9 $pid
+		fi
+	  	rm -f $pidfile
+	fi
+	check_status 1
+}
+
+check_run() {
+	if [ ! -f $pidfile ]; then
+		start_program
+	else
+		pid=`cat $pidfile`;
+	    if [ ! -d /proc/$pid ]; then
+			start_program
+		fi
+	fi
+}
+
+# change the DB password for all hawk tools
+change_hawk_pass() {
+	echo "Changing Hawk password"
+        newpass=`echo $RANDOM|md5sum|cut -c 1-12`
+        echo "New password: $newpass"
+        su - postgres -c "psql -c \"ALTER USER hawk PASSWORD '$newpass'\" template1"
+	sed -i '/hawk/s/\(.*\)/#\1/' ~/.pgpass
+        echo "*:5432:hawk:hawk:$newpass" >> ~/.pgpass
+	if ( ! grep hawk /var/lib/pgsql/data/pg_hba.conf > /dev/null ); then
+		sed -i "/^local\s\+all\s\+all\s\+ident\s\+sameuser/ihost hawk hawk 127.0.0.1 md5" /var/lib/pgsql/data/pg_hba.conf 
+		/etc/init.d/postgresql reload
+	fi
+	chmod 600 ~/.pgpass
+        sed -i "/^my \$pass/s/=.*/= '$newpass';/" /usr/local/sbin/hawk.pl
+	sed -i "/dbpass/s/=.*/=$newpass/" /home/sentry/hackman/hawk-web.conf
+        stop_program
+        sleep 1
+        start_program
+}
+
+
+
+# Install or reinstall the Hawk
+hawk_install() {
+        echo "Checking and removing old hawk files"
+        if [ -f /usr/local/sbin/hawk.pl ]; then
+                rm -f /usr/local/sbin/hawk.pl
+        fi
+        if [ -f /root/hawk-blocker.sh ]; then
+                rm -f /root/hawk-blocker.sh
+        fi
+        if [ -f ~sentry/public_html/cgi-bin/hawk-web.pl ]; then
+                rm -f ~sentry/public_html/cgi-bin/hawk-web.pl
+        fi
+        if [ -f /root/hawk_db.sql ]; then
+                rm -f /root/hawk_db.sql
+        fi
+	echo 'Downloading HAWK Daemon'
+        wget -c $hawkurl/hawk.source -O /usr/local/sbin/hawk.pl
+	echo 'Downloading hawk-blocker'
+        wget -c $hawkurl/hawk-blocker.source -O /root/hawk-blocker.sh
+	chmod 750 /root/hawk-blocker.sh /usr/local/sbin/hawk.pl
+	echo 'Downloading hawk web interface'
+        wget -c $hawkurl/hawk-web.source -O /home/sentry/public_html/cgi-bin/hawk-web.pl
+	chmod 755 /home/sentry/public_html/cgi-bin/hawk-web.pl
+	if [ ! -d /home/sentry/hackman ]; then
+		mkdir -p /home/sentry/hackman
+	fi
+	echo 'Downloading hawk web interface configuration file'
+	wget -c $hawkurl/hawk-web.conf -O /home/sentry/hackman/hawk-web.conf
+	chown sentry: /home/sentry/public_html/cgi-bin/hawk-web.pl /home/sentry/hackman/hawk-web.conf
+	echo 'Downloading hawk web interface html templates'
+	wget -c $hawkurl/templates.tgz -O /home/sentry/hackman/templates.tgz 
+	chown -R sentry: /home/sentry/hackman
+	echo 'Downloading hawk PgSQL database dump'
+        wget -c $hawkurl/hawk_db.sql -O /root/hawk_db.sql
+	echo "Installing hawk-web templates"
+	tar xfvz /home/sentry/hackman/templates.tgz -C /home/sentry/hackman
+	rm -f /home/sentry/hackman/templates.tgz
+	chown -R sentry: /home/sentry/hackman 
+        echo "Initializing Hawk DB..."
+        su - postgres -c "psql -c \"CREATE USER hawk PASSWORD 'myHawkPass'\" template1"
+        su - postgres -c "psql -c 'CREATE DATABASE hawk OWNER hawk' template1"
+        mv hawk_db.sql /var/lib/pgsql/
+        su - postgres -c "psql -f hawk_db.sql hawk"
+	change_hawk_pass
+	rm -f /var/lib/pgsql/hawk_db.sql
+	if ( ! grep 'HAWK-' /root/admin/sgfirewall > /dev/null ); then
+		echo -e "############ HAWK-BLCOKED ####################\n############ HAWK+BLOCKED ####################" >> /root/admin/sgfirewall
+		echo "Added HAWK lines to /root/admin/sgfirewall"
+	fi
+
+	if ( ! grep hawk /var/spool/cron/root > /dev/null ); then
+		chattr -ia /var/spool/cron/root
+		echo '17 * * * * /root/hawk-blocker.sh >> /root/hawk-blocker.log 2>&1' >> /var/spool/cron/root
+		chattr +ia /var/spool/cron/root
+	fi
+}
+create_table() {
+	if ( ! wget -c $hawkurl/hawk_db.sql-$1 -O /var/lib/pgsql/hawk_db.sql-$1 ); then
+		return 0
+	fi
+	su - postgres -c "psql -f hawk_db.sql-$1 hawk"
+	rm -f /var/lib/pgsql/hawk_db.sql-$1
+}
+
+# fix common problems with the DB
+check_db() {
+	list='broots failed_log blacklist'
+	for table in ${list}; do
+		if ( ! psql -q -t -Uhawk hawk -c '\d'|cut -d " " -f 4|grep -P "^$table$" > /dev/null); then
+ 			echo "Missing table $table" 
+			create_table $table
+		fi
+	done
+	echo "DB tables: OK"
+}
+
+# fix missing files
+check_files() {
+	error=0
+	if [ ! -f /root/hawk-blocker.sh ]; then
+		let error++
+	        wget -c $hawkurl/hawk-blocker.sh -O /root/hawk-blocker.sh	
+	fi
+	if [ ! -f ~sentry/public_html/cgi-bin/hawk-web.pl ]; then
+		let error++
+	        wget -c $hawkurl/hawk-web.pl -O ~sentry/public_html/cgi-bin/hawk-web.pl
+
+	fi
+	if [ ! -f ~sentry/public_html/cgi-bin/hawk-web.pl ]; then
+                let error++
+		if [ ! -d /home/sentry/hackman ]; then
+			mkdir -p /home/sentry/hackman
+		fi
+                wget -c $hawkurl/hawk-web.conf -O /home/sentry/hackman/
+		
+        fi
+	if [ ! -f /usr/local/sbin/hawk.pl ]; then
+		let error++
+	        wget -c $hawkurl/hawk.pl -O /usr/local/sbin/hawk.pl
+	fi
+	if [ "$error" == '4' ]; then
+		hawk_install
+	else
+		change_hawk_pass
+	fi
+}
+# Control structure
+case "$1" in
+	'start')
+		start_program
+	;;
+	'stop')
+		stop_program
+	;;
+	'restart')
+		stop_program
+		sleep 1
+		start_program
+	;;
+	'debug')
+		start_program debug
+	;;
+	'reload')
+		kill -HUP `cat $pidfile`
+	;;
+	'changepass')
+		change_hawk_pass
+	;;
+	'checkdb')
+		check_db
+	;;
+	'install')
+		if [ "$2" == "cgi" ]; then
+			hawk_install
+		else
+		        echo -n "Are you sure you want a complete reinstall of Hawk(y/n): "
+        		read a
+        		if [ "$a" != 'y' ]; then
+        		        exit 0;
+        		fi
+			hawk_install
+		fi
+	;;
+	'status')
+		echo -n 'Hawk status: '
+		check_status 0
+	;;
+	'check_run')
+		check_run
+	;;
+	*)
+	  echo "usage $0 start|stop|restart|debug|reload|install|changepass"
+esac

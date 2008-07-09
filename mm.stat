@@ -1,0 +1,26 @@
+pidfile='/var/run/hawk.pid'
+check_status() {
+    check=0;
+    for i in `seq 1 5`; do
+		if [ -f $pidfile ]; then
+	        if [ "$1" == 0 ]; then
+    	        if [ ! -d /proc/$pidfile ]; then
+                	check=1;
+	                continue 4;
+            	fi
+	        else
+    	        if [ -d /proc/$pidfile ]; then
+        	        check=1;
+            	    continue 4;
+	            fi
+    	    fi
+		fi
+        sleep 1
+    done
+    if [ $check == "1" ]; then
+        echo -e "OK"
+    else
+        echo -e "FAILED"
+    fi
+}
+

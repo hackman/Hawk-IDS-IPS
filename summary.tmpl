@@ -1,0 +1,86 @@
+<script>
+function showGraph(val) {
+	var DIVID = 'graph'+val;
+	if (document.getElementById(DIVID).style.visibility == 'visible') {
+		document.getElementById(DIVID).style.visibility = 'hidden';
+	} else {
+		document.getElementById(DIVID).style.visibility = 'visible';
+	}
+
+}
+
+</script>
+Summary by date(for the last 7 days only):<br />
+<table border=0>
+<tr><td valign=top>
+	All failed attempts: <a href="javascript: showGraph('0')">graph</a><br />
+<div id="graph0" style="position:absolute;top:146px;right:80; visibility: hidden">__GRAPH0__</div>
+	<table cellspacing=0 cellpadding=0 class='broots'>
+	<tr>
+		<td class='td-top'>Date</td>
+		<td class='td-top'>Count</td>
+	</tr>
+	__TABLE0__
+	</table>
+</td><td valign=top>
+	All bruteforce attempts:<a href="javascript: showGraph('1')">graph</a><br />
+<div id="graph1" style="position:absolute;top:146px;right:80; visibility: hidden">__GRAPH1__</div>
+	<table cellspacing=0 cellpadding=0 class='broots'>
+	<tr>
+		<td class='td-top'>Date</td>
+		<td class='td-top'>Count</td>
+	</tr>
+	__TABLE1__
+	</table>
+</td><td valign=top>
+	All blacklisted IPs:<br />
+	<table cellspacing=0 cellpadding=0 class='broots'>
+	<tr>
+		<td class='td-top'>Date</td>
+		<td class='td-top'>Count</td>
+	</tr>
+	__TABLE6__
+	</table>
+</td><td valign=top>
+	All blacklisted AND REMOVED IPs:<br />
+	<table cellspacing=0 cellpadding=0 class='broots'>
+	<tr>
+		<td class='td-top'>Date</td>
+		<td class='td-top'>Count</td>
+	</tr>
+	__TABLE7__
+	</table>
+</td></tr>
+</table>
+Summary by service(for the last 1 hour):<br />
+<table cellspacing=0 cellpadding=0 class='broots'>
+<tr>
+	<td class='td-top'><a href="?action=stat&w=sv&ss=3">SSH</a></td>
+	<td class='td-top'><a href="?action=stat&w=sv&ss=2">FTP</a></td>
+	<td class='td-top'><a href="?action=stat&w=sv&ss=0">POP3</a></td>
+	<td class='td-top'><a href="?action=stat&w=sv&ss=1">IMAP</a></td>
+	<td class='td-top'><a href="?action=stat&w=sv&ss=4">cPanel</a></td></tr>
+__TABLE2__
+</table>
+Summary IPs that have been detected to bruteforce services on the server(for the last 1 hour):
+<table cellspacing=0 cellpadding=0 class='broots'>
+<tr>
+	<td class='td-top'>IP Address</td>
+</tr>
+__TABLE3__
+</table>
+Summary IPs that have been detected to bruteforce services on the server(for the last 1 day):
+<table cellspacing=0 cellpadding=0 class='broots'>
+<tr>
+	<td class='td-top'>IP Address</td>
+</tr>
+__TABLE4__
+</table>
+Summary IPs that have been detected to bruteforce services on the server(for the last 7 days):
+<table cellspacing=0 cellpadding=0 class='broots'>
+<tr>
+	<td class='td-top'>IP Address</td>
+</tr>
+__TABLE5__
+</table>
+
