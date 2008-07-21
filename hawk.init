@@ -98,26 +98,26 @@ change_hawk_pass() {
 
 # Install or reinstall the Hawk
 hawk_install() {
-        echo "Checking and removing old hawk files"
-        if [ -f /usr/local/sbin/hawk.pl ]; then
-                rm -f /usr/local/sbin/hawk.pl
-        fi
-        if [ -f /root/hawk-blocker.sh ]; then
-                rm -f /root/hawk-blocker.sh
-        fi
-        if [ -f ~sentry/public_html/cgi-bin/hawk-web.pl ]; then
-                rm -f ~sentry/public_html/cgi-bin/hawk-web.pl
-        fi
-        if [ -f /root/hawk_db.sql ]; then
-                rm -f /root/hawk_db.sql
-        fi
+	echo "Checking and removing old hawk files"
+	if [ -f /usr/local/sbin/hawk.pl ]; then
+		rm -f /usr/local/sbin/hawk.pl
+	fi
+	if [ -f /root/hawk-blocker.sh ]; then
+		rm -f /root/hawk-blocker.sh
+	fi
+	if [ -f ~sentry/public_html/cgi-bin/hawk-web.pl ]; then
+		rm -f ~sentry/public_html/cgi-bin/hawk-web.pl
+	fi
+	if [ -f /root/hawk_db.sql ]; then
+		rm -f /root/hawk_db.sql
+	fi
 	echo 'Downloading HAWK Daemon'
-        wget -c $hawkurl/hawk.source -O /usr/local/sbin/hawk.pl
+	wget -c $hawkurl/hawk.source -O /usr/local/sbin/hawk.pl
 	echo 'Downloading hawk-blocker'
-        wget -c $hawkurl/hawk-blocker.source -O /root/hawk-blocker.sh
+	wget -c $hawkurl/hawk-blocker.source -O /root/hawk-blocker.sh
 	chmod 750 /root/hawk-blocker.sh /usr/local/sbin/hawk.pl
 	echo 'Downloading hawk web interface'
-        wget -c $hawkurl/hawk-web.source -O /home/sentry/public_html/cgi-bin/hawk-web.pl
+	wget -c $hawkurl/hawk-web.source -O /home/sentry/public_html/cgi-bin/hawk-web.pl
 	chmod 755 /home/sentry/public_html/cgi-bin/hawk-web.pl
 	if [ ! -d /home/sentry/hackman ]; then
 		mkdir -p /home/sentry/hackman
@@ -129,16 +129,16 @@ hawk_install() {
 	wget -c $hawkurl/templates.tgz -O /home/sentry/hackman/templates.tgz 
 	chown -R sentry: /home/sentry/hackman
 	echo 'Downloading hawk PgSQL database dump'
-        wget -c $hawkurl/hawk_db.sql -O /root/hawk_db.sql
+	wget -c $hawkurl/hawk_db.sql -O /root/hawk_db.sql
 	echo "Installing hawk-web templates"
 	tar xfvz /home/sentry/hackman/templates.tgz -C /home/sentry/hackman
 	rm -f /home/sentry/hackman/templates.tgz
 	chown -R sentry: /home/sentry/hackman 
-        echo "Initializing Hawk DB..."
-        su - postgres -c "psql -c \"CREATE USER hawk PASSWORD 'myHawkPass'\" template1"
-        su - postgres -c "psql -c 'CREATE DATABASE hawk OWNER hawk' template1"
-        mv hawk_db.sql /var/lib/pgsql/
-        su - postgres -c "psql -f hawk_db.sql hawk"
+	echo "Initializing Hawk DB..."
+	su - postgres -c "psql -c \"CREATE USER hawk PASSWORD 'myHawkPass'\" template1"
+	su - postgres -c "psql -c 'CREATE DATABASE hawk OWNER hawk' template1"
+	mv hawk_db.sql /var/lib/pgsql/
+	su - postgres -c "psql -f hawk_db.sql hawk"
 	change_hawk_pass
 	rm -f /var/lib/pgsql/hawk_db.sql
 	if ( ! grep 'HAWK-' /root/admin/sgfirewall > /dev/null ); then
@@ -177,24 +177,23 @@ check_files() {
 	error=0
 	if [ ! -f /root/hawk-blocker.sh ]; then
 		let error++
-	        wget -c $hawkurl/hawk-blocker.sh -O /root/hawk-blocker.sh	
+		wget -c $hawkurl/hawk-blocker.sh -O /root/hawk-blocker.sh	
 	fi
 	if [ ! -f ~sentry/public_html/cgi-bin/hawk-web.pl ]; then
 		let error++
-	        wget -c $hawkurl/hawk-web.pl -O ~sentry/public_html/cgi-bin/hawk-web.pl
+		wget -c $hawkurl/hawk-web.pl -O ~sentry/public_html/cgi-bin/hawk-web.pl
 
 	fi
 	if [ ! -f ~sentry/public_html/cgi-bin/hawk-web.pl ]; then
-                let error++
+		let error++
 		if [ ! -d /home/sentry/hackman ]; then
 			mkdir -p /home/sentry/hackman
 		fi
-                wget -c $hawkurl/hawk-web.conf -O /home/sentry/hackman/
-		
-        fi
+		wget -c $hawkurl/hawk-web.conf -O /home/sentry/hackman/	
+	fi
 	if [ ! -f /usr/local/sbin/hawk.pl ]; then
 		let error++
-	        wget -c $hawkurl/hawk.pl -O /usr/local/sbin/hawk.pl
+		wget -c $hawkurl/hawk.pl -O /usr/local/sbin/hawk.pl
 	fi
 	if [ "$error" == '4' ]; then
 		hawk_install
@@ -231,11 +230,11 @@ case "$1" in
 		if [ "$2" == "cgi" ]; then
 			hawk_install
 		else
-		        echo -n "Are you sure you want a complete reinstall of Hawk(y/n): "
-        		read a
-        		if [ "$a" != 'y' ]; then
-        		        exit 0;
-        		fi
+			echo -n "Are you sure you want a complete reinstall of Hawk(y/n): "
+			read a
+			if [ "$a" != 'y' ]; then
+				exit 0;
+			fi
 			hawk_install
 		fi
 	;;
@@ -247,5 +246,5 @@ case "$1" in
 		check_run
 	;;
 	*)
-	  echo "usage $0 start|stop|restart|debug|reload|install|changepass"
+	  echo -e "usage $0 OPTION\nBasic options:\t\tstart|stop|restart|status\nAdvanced options:\tdebug|reload|install|changepass|checkdb|check_run"
 esac
