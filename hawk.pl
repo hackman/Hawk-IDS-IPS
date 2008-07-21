@@ -276,14 +276,6 @@ sub send_fault() {
 
 our @senders = ();
 while (<LOGS>) {
-	eval {
-		local $SIG{ALRM} = sub { die 'alarm'; };
-		alarm 2;
-		# clean the childs(RAPER)
-		# I have to write the new(better) RAPER, using SIGCHLD
-		waitpid($_, 0) foreach(@senders);
-		alarm 0;
-	};
 	# Feb 13 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
 	# Feb 13 19:18:58 serv01 kernel: end_request: I/O error, dev sdb, sector 1405727387 
 	if ( $_ =~ /I\/O error/i ) {
@@ -415,6 +407,14 @@ while (<LOGS>) {
 	my $passed_time = time() - $start_time;	# get the pssed time
 	if ($passed_time > $broot_time) {		# if the passed time is grater then $broot_time
 		cleanh();							# clean the hashes
+		eval {
+			local $SIG{ALRM} = sub { die 'alarm'; };
+			alarm 2;
+			# clean the childs(RAPER)
+			# I have to write the new(better) RAPER, using SIGCHLD
+			waitpid($_, 0) foreach(@senders);
+			alarm 0;
+		};
 		$start_time = time();				# set the start_time to now
 	}
 }
