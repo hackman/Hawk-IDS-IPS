@@ -113,7 +113,6 @@ sub get_num_service {
 		return 'ssh';
 	} elsif ($_[0] == 4) {
 		return 'cp_panel';
-	}
 	} elsif ($_[0] == 5) {
 		return 'cp_webmail';
 	}
