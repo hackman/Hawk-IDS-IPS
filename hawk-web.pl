@@ -96,8 +96,10 @@ sub get_service_num {
 		return '2';
 	} elsif ($_[0] eq 'ssh') {
 		return '3';
-	} elsif ($_[0] =~  /cpanel/i) {
+	} elsif ($_[0] eq 'cp_panel') {
 		return 4;
+	} elsif ($_[0] eq 'cp_webmail') {
+		return 5;
 	}
 }
 sub get_num_service {
@@ -110,7 +112,10 @@ sub get_num_service {
 	} elsif ($_[0] == 3) {
 		return 'ssh';
 	} elsif ($_[0] == 4) {
-		return 'cpanel';
+		return 'cp_panel';
+	}
+	} elsif ($_[0] == 5) {
+		return 'cp_webmail';
 	}
 }
 
@@ -372,7 +377,7 @@ function sort(val) {
 } else {
 	my $lines = '';
 	my $line0 = "<tr><td>__DATE__</td><td>__COUNT__</td></tr>\n";
-	my $line1 = "<tr><td>__SSH__</td><td>__FTP__</td><td>__POP3__</td><td>__IMAP__</td><td>__CPANEL__</td></tr>\n";
+	my $line1 = "<tr><td>__SSH__</td><td>__FTP__</td><td>__POP3__</td><td>__IMAP__</td><td>__CPANEL__</td><td>__WEBMAIL__</td></tr>\n";
 	my $line2 = "<tr><td><a href=\"?action=search\&w=ip\&addr=__IP__\">__IP__</a></td></tr>\n";
 
 	# last 1 hour
@@ -455,7 +460,9 @@ function sort(val) {
 		my $imap = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
 			WHERE service = \'imap\' AND date > (now() - interval \'1 hour\')');
 		my $cpanel = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'cpanel\' AND date > (now() - interval \'1 hour\')');
+			WHERE service = \'cp_panel\' AND date > (now() - interval \'1 hour\')');
+		my $webmail = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
+			WHERE service = \'cp_webmail\' AND date > (now() - interval \'1 hour\')');
 		$html .= get_template('summary');
 
 		my $i=2;
@@ -536,6 +543,7 @@ function sort(val) {
 		$line1 =~ s/__POP3__/$pop3/;
 		$line1 =~ s/__IMAP__/$imap/;
 		$line1 =~ s/__CPANEL__/$cpanel/;
+		$line1 =~ s/__WEBMAIL__/$webmail/;
 		$html =~ s/__TABLE2__/$line1/;
 		
 		$lines = '';
