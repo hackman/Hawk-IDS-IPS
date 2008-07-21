@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hawk init script
-# version 2.0
+# version 2.1
 hawkurl='http://master.sgvps.net/hawk/'
 pidfile='/var/run/hawk.pid'
 program='/usr/local/sbin/hawk.pl'
@@ -80,18 +80,18 @@ change_hawk_pass() {
         newpass=`echo $RANDOM|md5sum|cut -c 1-12`
         echo "New password: $newpass"
         su - postgres -c "psql -c \"ALTER USER hawk PASSWORD '$newpass'\" template1"
-	sed -i '/hawk/s/\(.*\)/#\1/' ~/.pgpass
+		sed -i '/hawk/D' ~/.pgpass
         echo "*:5432:hawk:hawk:$newpass" >> ~/.pgpass
 	if ( ! grep hawk /var/lib/pgsql/data/pg_hba.conf > /dev/null ); then
 		sed -i "/^local\s\+all\s\+all\s\+ident\s\+sameuser/ihost hawk hawk 127.0.0.1 md5" /var/lib/pgsql/data/pg_hba.conf 
 		/etc/init.d/postgresql reload
 	fi
 	chmod 600 ~/.pgpass
-        sed -i "/^my \$pass/s/=.*/= '$newpass';/" /usr/local/sbin/hawk.pl
+    sed -i "/^my \$pass/s/=.*/= '$newpass';/" /usr/local/sbin/hawk.pl
 	sed -i "/dbpass/s/=.*/=$newpass/" /home/sentry/hackman/hawk-web.conf
-        stop_program
-        sleep 1
-        start_program
+    stop_program
+    sleep 1
+    start_program
 }
 
 
