@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.71';		# version string
+my $version = '0.72';		# version string
 
 # defining fault hashes
 our %ssh_faults;		# ssh faults storage
@@ -26,7 +26,7 @@ my $pass	= '157856cc61d4';
 my $logfile = '/var/log//hawk.log';	# daemon logfile
 my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
 my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamps for I/O Errors
-my $log_list = '/usr/bin/tail -f /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log  |';
+my $log_list = '/usr/bin/tail -f /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 our $debug = 0;			# by default debuging is OFF
@@ -393,17 +393,21 @@ while (<LOGS>) {
 			$ftp_faults{$ftp[5]} = 1;
 		}
 		logger("IP $ftp[5]($ftp[11]) failed to identify to Pure-FTPD.") if ($debug);
-#	} elsif ( $_ =~ / 401 / && $_ =~ /GET / ) {
-#	#85.14.6.2 - root [05/16/2007:07:58:28 -0000] "GET / HTTP/1." 401 0 "" "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.8.1.1) Gecko/20061208 Firefox/2.0.0.1"
-#		my @cpanel = split /\s+/;
-#		$cpanel[2] = '' if $cpanel[2] =~ /\[/;
-#		$log_me->execute($cpanel[0], $cpanel[2], 'cpanel');
-#		if ( exists $cpanel_faults {$cpanel[0]} ) {
-#			$cpanel_faults{$cpanel[0]}++;
-#		} else {
-#			$cpanel_faults{$cpanel[0]} = 1;
-#		}
-#		logger("IP $cpanel[0]($cpanel[2])failed to identify to cPanel.") if ($debug);
+	} elsif ($_ =~ /FAILED LOGIN/ && $_ =~ /webmaild:/ && $_ =~ /cpaneld:/) {
+	#209.62.36.16 - webmail.siteground216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
+	#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
+
+		my @cpanel = split /\s+/;
+		my $service = 'webmail';
+		$service = 'cpanel' if ($cpanel[10] eq 'cpaneld:');
+		$cpanel[2] = '' if $cpanel[2] =~ /\[/;
+		$log_me->execute($cpanel[0], $cpanel[2], 'cp_'.$service);
+		if ( exists $cpanel_faults {$cpanel[0]} ) {
+			$cpanel_faults{$cpanel[0]}++;
+		} else {
+			$cpanel_faults{$cpanel[0]} = 1;
+		}
+		logger("IP $cpanel[0]($cpanel[2])failed to identify to cPanel($service).") if ($debug);
    	} else {
 		next;
 	}
