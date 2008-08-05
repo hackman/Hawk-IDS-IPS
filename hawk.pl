@@ -385,7 +385,7 @@ while (<LOGS>) {
 			$ftp_faults{$ftp[5]} = 1;
 		}
 		logger("IP $ftp[5]($ftp[11]) failed to identify to Pure-FTPD.") if ($debug);
-	} elsif ($_ =~ /FAILED LOGIN/ && $_ =~ /webmaild:/ && $_ =~ /cpaneld:/) {
+	} elsif ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) {
 	#209.62.36.16 - webmail.siteground216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
 	#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
 
