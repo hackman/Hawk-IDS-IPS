@@ -6,26 +6,23 @@ use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.74';	# version string
+my $version = '0.76';	# version string
 
 # defining fault hashes
-our %ssh_faults;		# ssh faults storage
-our %ftp_faults;			# ftp faults storage
-our %pop3_faults;		# pop3 faults storage
-our %imap_faults;		# imap faults storage
-our %smtp_faults;		# smtp faults storage
-our %cpanel_faults;		# cpanel faults storage
-our %notifications;		# notifications
+our %ssh_faults = ();		# ssh faults storage
+our %ftp_faults = ();		# ftp faults storage
+our %pop3_faults = ();		# pop3 faults storage
+our %imap_faults = ();		# imap faults storage
+our %smtp_faults = ();		# smtp faults storage
+our %cpanel_faults = ();	# cpanel faults storage
+our %notifications = ();	# notifications
+
+our %possible_attackers = ();	# possible hack attempts
 
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
 my $user	= 'hawk';
 my $pass	= '157856cc61d4';
-
-my $dbhost	= '209.85.112.32';
-my $dbuser	= 'parolcho';
-my $dbpass	= 'parolataa';
-my $dbase	= 'sitechecker';
 
 # Hawk files
 my $logfile = '/var/log//hawk.log';	# daemon logfile
@@ -186,6 +183,20 @@ sub check_broot {
 			notify('ftp', $k, $ftp_faults{$k});
 		}
 	}
+	while ( my ($k,$v) = each (%possible_attackers) ) {
+		if ( $possible_attackers{$k}[0] > 5 ) {
+			if (defined($possible_attackers{$k}[3])) {
+				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
+					$possible_attackers{$k}[3] = 6;
+					notify_hack("$hostname possible break in, ".$possible_attackers{$k}[0]." attempts with different usernames from ip $k(".$possible_attackers{$k}[2].')');
+				}
+			} else {
+				notify_hack("$hostname possible break in, ".$possible_attackers{$k}[0]." attempts with different usernames from ip $k(".$possible_attackers{$k}[2].')');
+				$possible_attackers{$k}[3] = 1;
+			}
+		}
+	}
+
 }
 
 # Fork to background
@@ -229,7 +240,20 @@ my $get_failed = $conn->prepare('SELECT COUNT(id) AS id FROM failed_log')
 # 	die "Autoreconnect turned OFF!\n";
 # }
 
-# notification to admins
+# notifications to admins
+
+sub notify_hack {
+	my $message = shift;
+	my $dbhost	= '209.85.112.32';
+	my $dbuser	= 'parolcho';
+	my $dbpass	= 'parolataa';
+	my $dbase	= 'sitechecker';	
+	my $mconn = DBI->connect("DBI:mysql:database=$dbase:host=$dbhost","$dbuser","$dbpass", {'RaiseError' => 0});
+	my $notify = $mconn->prepare("INSERT internal_notes(servername,date,notice) VALUES('$hostname' , now(), '$message')");
+	$notify->execute;
+	$notify->finish;
+	$mconn->disconnect;
+}
 sub notify {
 	# 0 - SERVICE 
 	# 1 - IP
@@ -310,12 +334,7 @@ while (<LOGS>) {
 		my $user = $ip;
 		$user =~ s/\((.*)\@.*/$1/;
 		$ip   =~ s/.*\@(.*)\)/$1/;
-		my $message = "Possible hack attempt at $hostname to user $user from ip $ip";
-		my $mconn = DBI->connect("DBI:mysql:database=$dbase:host=$dbhost","$dbuser","$dbpass", {'RaiseError' => 0});
-		my $notify = $mconn->prepare("INSERT internal_notes(servername,date,notice) VALUES('$hostname' , now(), '$message')");
-		$notify->execute;
-		$notify->finish;
-		$mconn->disconnect;
+		notify_hack("Possible hack attempt at $hostname to user $user from ip $ip");
  	} elsif ( $_ =~ /ssh/ && $_ =~ /Failed/ ) {
 	#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
 	#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
@@ -361,6 +380,14 @@ while (<LOGS>) {
 		$pop3[7] =~ s/user=(.*),/$1/;
 		$pop3[8] =~ s/.*:// if $pop3[8] =~ /ffff/;
 		next if ( $pop3[8] =~ /$myip/ );	# this is the local server
+		if ( exists $possible_attackers {$pop3[8]} && $possible_attackers{$pop3[8]}[1] ne $pop3[7] ) {
+			$possible_attackers{$pop3[8]}[0]++;
+			$possible_attackers{$pop3[8]}[1] = $pop3[7];
+			logger("Possible attacker ".$possible_attackers{$pop3[8]}[0]." attempts with different usernames from ip ".$pop3[8]) if $debug;
+		} else {
+			$possible_attackers{$pop3[8]} = [ 0, $pop3[7], 'pop3' ];
+			logger("Possible attacker first attempt with different usernames from ip ".$pop3[8]) if $debug;
+		}
 		$log_me->execute($pop3[8], $pop3[7], 'pop3');
 		if ( exists $pop3_faults {$pop3[8]} ) {
 			$pop3_faults{$pop3[8]}++;
@@ -389,6 +416,14 @@ while (<LOGS>) {
 		$imap[8] =~ s/host=\[::ffff:(.*)\]/$1/;
 		$imap[7] =~ s/user=//;
 		next if ( $imap[8] =~ /$myip/ );	# this is the local server
+		if ( exists $possible_attackers {$imap[8]} && $possible_attackers{$imap[8]}[1] ne $imap[7] ) {
+			$possible_attackers{$imap[8]}[0]++;
+			$possible_attackers{$imap[8]}[1] = $imap[7];
+			logger("Possible attacker ".$possible_attackers{$imap[8]}[0]." attempts with different usernames from ip ".$imap[8]) if $debug;
+		} else {
+			$possible_attackers{$imap[8]} = [ 0, $imap[7], 'imap' ];
+			logger("Possible attacker first attempt with different usernames from ip ".$imap[8]) if $debug;
+		}
 		$log_me->execute($imap[8], $imap[7], 'imap');
 		if ( exists $imap_faults {$imap[8]} ) {
 			$imap_faults{$imap[8]}++;
@@ -403,6 +438,14 @@ while (<LOGS>) {
  		$ftp[5] =~ s/\(.*\@(.*)\)/$1/;	# get the IP
 		$ftp[11] =~ s/\[(.*)\]/$1/;		# get the username
 		$log_me->execute($ftp[5], $ftp[11], 'ftp') or logger("Unable to execute query: $DBI::errstr");
+		if ( exists $possible_attackers {$ftp[5]} && $possible_attackers{$ftp[5]}[1] ne $ftp[11])  {
+			$possible_attackers{$ftp[5]}[0]++;
+			$possible_attackers{$ftp[5]}[1] = $ftp[11];
+			logger("Possible attacker ".$possible_attackers{$ftp[5]}[0]." attempts with different usernames from ip ".$ftp[5]) if $debug;
+		} else {
+			$possible_attackers{$ftp[5]} = [ 0, $ftp[11], 'ftp' ];
+			logger("Possible attacker first attempt with different usernames from ip ".$ftp[5]) if $debug;
+		}
 		if ( exists $ftp_faults {$ftp[5]} ) {
 			$ftp_faults{$ftp[5]}++;
 		} else {
