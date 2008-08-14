@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.73';	# version string
+my $version = '0.74';	# version string
 
 # defining fault hashes
 our %ssh_faults;		# ssh faults storage
