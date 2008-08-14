@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.72';		# version string
+my $version = '0.73';	# version string
 
 # defining fault hashes
 our %ssh_faults;		# ssh faults storage
@@ -18,9 +18,14 @@ our %cpanel_faults;		# cpanel faults storage
 our %notifications;		# notifications
 
 # make DB vars
-my $db	= 'DBI:Pg:database=hawk;host=localhost;port=5432';
+my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
 my $user	= 'hawk';
 my $pass	= '157856cc61d4';
+
+my $dbhost	= '209.85.112.32';
+my $dbuser	= 'parolcho';
+my $dbpass	= 'parolataa';
+my $dbase	= 'sitechecker';
 
 # Hawk files
 my $logfile = '/var/log//hawk.log';	# daemon logfile
@@ -32,6 +37,7 @@ our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 our $debug = 0;			# by default debuging is OFF
 our $do_limit = 0;		# by default do not limit the offending IPs
 
+my $hostname = '';
 my $start_time = time();
 my $myip = get_ip();
 
@@ -40,6 +46,11 @@ my $myip = get_ip();
 if ( defined($ARGV[0]) && $ARGV[0] =~ /debug/ ) {
 	$debug=1;		# turn on debuging
 }
+
+open HOST, '<', '/proc/sys/kernel/hostname';
+$hostname = <HOST>;
+close HOST;
+$hostname =~ s/[\r|\n]//;
 
 # changing to unbuffered output
 our $| = 1;
@@ -292,6 +303,19 @@ while (<LOGS>) {
 			&send_fault($line[14]);
 			exit 0;
 		}		
+	} elsif ($_ =~ /\/\.htaccess uploaded/) {
+	# Aug 13 16:20:09 serv01 pure-ftpd: (kansasc1@87.248.180.90) [NOTICE] /home/kansasc1//.htaccess uploaded  (471 bytes, 2.83KB/sec)
+		my @line = split /\s+/, $_;
+		my $ip = $line[5];
+		my $user = $ip;
+		$user =~ s/\((.*)\@.*/$1/;
+		$ip   =~ s/.*\@(.*)\)/$1/;
+		my $message = "Possible hack attempt at $hostname to user $user from ip $ip";
+		my $mconn = DBI->connect("DBI:mysql:database=$dbase:host=$dbhost","$dbuser","$dbpass", {'RaiseError' => 0});
+		my $notify = $mconn->prepare("INSERT internal_notes(servername,date,notice) VALUES('$hostname' , now(), '$message')");
+		$notify->execute;
+		$notify->finish;
+		$mconn->disconnect;
  	} elsif ( $_ =~ /ssh/ && $_ =~ /Failed/ ) {
 	#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
 	#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
@@ -385,7 +409,7 @@ while (<LOGS>) {
 			$ftp_faults{$ftp[5]} = 1;
 		}
 		logger("IP $ftp[5]($ftp[11]) failed to identify to Pure-FTPD.") if ($debug);
-	} elsif ($_ =~ /FAILED LOGIN/ && $_ =~ /webmaild:/ && $_ =~ /cpaneld:/) {
+	} elsif ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) {
 	#209.62.36.16 - webmail.siteground216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
 	#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
 
