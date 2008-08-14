@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.76';	# version string
+my $version = '0.78';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -18,6 +18,7 @@ our %cpanel_faults = ();	# cpanel faults storage
 our %notifications = ();	# notifications
 
 our %possible_attackers = ();	# possible hack attempts
+# our %possible_shitters = ();	# possible hack attempts
 
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
@@ -196,6 +197,19 @@ sub check_broot {
 			}
 		}
 	}
+# 	while ( my ($k,$v) = each (%possible_shitters) ) {
+# 		if ( $possible_shitters{$k}[0] > 5 ) {
+# 			if (defined($possible_shitters{$k}[3])) {
+# 				if ($possible_shitters{$k}[0] > 25 && $possible_shitters{$k}[3] < 3) {
+# 					$possible_shitters{$k}[3] = 6;
+# 					notify_hack("$hostname possible break in, ".$possible_shitters{$k}[0]." attempts with different VALID usernames from ip $k(".$possible_shitters{$k}[2].')');
+# 				}
+# 			} else {
+# 				notify_hack("$hostname possible break in, ".$possible_shitters{$k}[0]." attempts with different VALID usernames from ip $k(".$possible_shitters{$k}[2].')');
+# 				$possible_shitters{$k}[3] = 1;
+# 			}
+# 		}
+# 	}
 
 }
 
@@ -431,9 +445,36 @@ while (<LOGS>) {
 			$imap_faults{$imap[8]} = 1;
 		}
 		logger(" IP $imap[8]($imap[7]) failed to identify to courier-imap.") if ($debug);
+# 	} elsif ( ( $_ =~ /pop3d/ || $_ =~ /imapd/ ) && $_ =~ /LOGIN,/ ) {
+# 	# Aug 14 05:35:42 serv01 pop3d: LOGIN, user=info@webmatje.com, ip=[::ffff:78.20.185.245], port=[50157]	
+# 	# Aug 14 11:53:13 serv01 imapd-ssl: LOGIN, user=mario@wineliteimports.com, ip=[::ffff:67.223.72.67], port=[35404],
+# 	# Aug 14 11:53:37 serv01 imapd: LOGIN, user=michael@unce.us, ip=[::ffff:67.15.245.10], port=[42349], protocol=IMAP
+# 		my @line = split /\s+/, $_;
+# 		$line[6] =~ s/user=(.*),/$1/; 			# USERa
+# 		$line[7] =~ s/ip=\[::ffff:(.*)\],/$1/;	# IP.*
+# 		if ( exists $possible_shitters {$line[7]} && $possible_shitters{$line[7]}[1] ne $line[6] ) {
+# 			$possible_shitters{$line[7]}[0]++;
+# 			$possible_shitters{$line[7]}[1] = $line[6];
+# 			logger("Possible attacker ".$possible_shitters{$line[6]}[0]." attempts with different usernames from ip ".$line[6]) if $debug;
+# 		} else {
+# 			$possible_shitters{$line[7]} = [ 0, $line[6], 'imap' ];
+# 			logger("Possible attacker first attempt with different usernames from ip ".$line[6]) if $debug;
+# 		}
+# 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /is now logged in/ ) {
+# 	# Aug 14 06:09:05 serv01 pure-ftpd: (?@85.107.173.46) [INFO] tolga@hellnewer.com is now logged in
+# 		my @line = split /\s+/, $_;
+# 		$line[5] =~ s/\(.*\@(.*)\)/$1/;	# IP.*
+# 		if ( exists $possible_shitters {$line[5]} && $possible_shitters{$line[5]}[1] ne $line[6] ) {
+# 			$possible_shitters{$line[5]}[0]++;
+# 			$possible_shitters{$line[5]}[1] = $line[7];
+# 			logger("Possible attacker ".$possible_shitters{$line[5]}[0]." attempts with different usernames from ip ".$line[5]) if $debug;
+# 		} else {
+# 			$possible_shitters{$line[5]} = [ 0, $line[7], 'imap' ];
+# 			logger("Possible attacker first attempt with different usernames from ip ".$line[5]) if $debug;
+# 		}
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
-	#May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
-	#Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
+	# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
+	# Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
 		my @ftp = split /\s+/, $_;	
  		$ftp[5] =~ s/\(.*\@(.*)\)/$1/;	# get the IP
 		$ftp[11] =~ s/\[(.*)\]/$1/;		# get the username
