@@ -197,6 +197,8 @@ sub check_broot {
 			}
 		}
 	}
+
+
 # 	while ( my ($k,$v) = each (%possible_shitters) ) {
 # 		if ( $possible_shitters{$k}[0] > 5 ) {
 # 			if (defined($possible_shitters{$k}[3])) {
@@ -258,15 +260,18 @@ my $get_failed = $conn->prepare('SELECT COUNT(id) AS id FROM failed_log')
 
 sub notify_hack {
 	my $message = shift;
+	my $enabled = 0;
 	my $dbhost	= '209.85.112.32';
 	my $dbuser	= 'parolcho';
 	my $dbpass	= 'parolataa';
 	my $dbase	= 'sitechecker';	
-	my $mconn = DBI->connect("DBI:mysql:database=$dbase:host=$dbhost","$dbuser","$dbpass", {'RaiseError' => 0});
-	my $notify = $mconn->prepare("INSERT internal_notes(servername,date,notice) VALUES('$hostname' , now(), '$message')");
-	$notify->execute;
-	$notify->finish;
-	$mconn->disconnect;
+	if ($enabled) {	
+		my $mconn = DBI->connect("DBI:mysql:database=$dbase:host=$dbhost","$dbuser","$dbpass", {'RaiseError' => 0});
+		my $notify = $mconn->prepare("INSERT internal_notes(servername,date,notice) VALUES('$hostname' , now(), '$message')");
+		$notify->execute;
+		$notify->finish;
+		$mconn->disconnect;
+	}
 }
 sub notify {
 	# 0 - SERVICE 
@@ -348,7 +353,7 @@ while (<LOGS>) {
 		my $user = $ip;
 		$user =~ s/\((.*)\@.*/$1/;
 		$ip   =~ s/.*\@(.*)\)/$1/;
-		notify_hack("Possible hack attempt at $hostname to user $user from ip $ip");
+ 		notify_hack("Possible hack attempt at $hostname to user $user from ip $ip");
  	} elsif ( $_ =~ /ssh/ && $_ =~ /Failed/ ) {
 	#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
 	#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
