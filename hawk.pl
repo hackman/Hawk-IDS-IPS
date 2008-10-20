@@ -308,7 +308,7 @@ sub send_fault() {
 		local $SIG{ALRM} = sub { die 'alarm'; };
 		alarm 5;
 		use IO::Socket::INET;
-		if ( my $sock = new IO::Socket::INET ( PeerAddr => '64.246.15.53', PeerPort => '80', Proto => 'tcp', Timeout => '3') ) {
+		if ( my $sock = new IO::Socket::INET ( PeerAddr => 'master.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3') ) {
 			# Send the faulty drive!
 			print $sock "GET /~sentry/cgi-bin/ioerrors.pl?hdd=$_[0]\n\n";
 			my @replay = <$sock>;
