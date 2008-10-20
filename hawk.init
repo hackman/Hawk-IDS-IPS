@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hawk init script
-# version 2.1
+# version 2.2
 hawkurl='http://master.sgvps.net/hawk/'
 pidfile='/var/run/hawk.pid'
 program='/usr/local/sbin/hawk.pl'
@@ -56,7 +56,7 @@ stop_program() {
 	if [ -f $pidfile ]; then
 		pid=`cat $pidfile`
 		if [ -d /proc/$pid ]; then
-	  		kill -9 $pid
+	  		kill -15 $pid
 		fi
 	  	rm -f $pidfile
 	fi
