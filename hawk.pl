@@ -17,6 +17,7 @@ our %smtp_faults = ();		# smtp faults storage
 our %cpanel_faults = ();	# cpanel faults storage
 our %notifications = ();	# notifications
 our %possible_attackers = ();	# possible hack attempts
+our %authenticated_ips = ();	# authenticated_ips storage
 # our %possible_shitters = ();	# possible hack attempts
 
 # make DB vars
@@ -38,6 +39,8 @@ my $courier_imap = 0;
 my $dovecot = 0;
 my $hostname = '';
 my $start_time = time();
+my $pop_time = $start_time;
+my $pop_max_time = 1800;
 my $myip = get_ip();
 
 
@@ -143,72 +146,56 @@ sub cleanh {
 
 sub save_ip {
 	my $ip = shift;
+	$authenticated_ips{$ip} = time();
 	open AUTH, '>>', $authenticated_ips_file;
 	print AUTH $ip, "\n";
 	close AUTH;
 }
 
 sub clean_ips {
+	my @to_be_removed = ();
+	# first get all IPs that are to be removed(duration more then $pop_max_time)
+	# and remove the IPs from authenticated_ips hash
+	while ( my ($k, $v) = each(%authenticated_ips) ) {
+		my $duration = time() - $v;
+		if ($v > $pop_max_time ) {
+			push(@to_be_removed, $k);
+			delete($authenticated_ips{$k});
+		}
+	}
+	# now get the file into a string
+	open AUTH, '<', $authenticated_ips_file;
+	my $auth = <AUTH>;
+	close AUTH;
+	# write the new file without the ips from @to_be_removed
 	open AUTH, '>', $authenticated_ips_file;
-	print AUTH '';
+	while ( <AUTH> ) {
+		foreach my $ip (@to_be_removed) {
+			next if ($_ =~ /$ip/);
+		}
+		print AUTH $_;
+	}
 	close AUTH;
 }
 # check for broots
 sub check_broot {
-# 	foreach ( keys %ssh_faults ) {
-# 		if ( $ssh_faults{$_} > $max_attempts ) {
-# 			notify('ssh', $_, $ssh_faults{$_});
-# 		}
-# 	}
-# 	foreach ( keys %pop3_faults ) {
-# 		if ( $pop3_faults{$_} >= $max_attempts ) {
-# 			notify('pop3', $_, $pop3_faults{$_});
-# 		}
-# 	}
-# 	foreach ( keys %imap_faults ) {
-# 		if ( $imap_faults{$_} > $max_attempts ) {
-# 			notify('imap', $_, $imap_faults{$_});
-# 		}
-# 	}
-#         foreach ( keys %smtp_faults ) {
-#                 if ( $smtp_faults{$_} > $max_attempts ) {
-#                         notify('imap', $_, $smtp_faults{$_});
-#                 }
-#         }
-# 	foreach ( keys %cpanel_faults ) {
-# 		if ( $cpanel_faults{$_} > $max_attempts ) {
-# 			notify('cPanel', $_, $cpanel_faults{$_});
-# 		}
-# 	}
 	while ( my ($k,$v) = each (%ssh_faults) ) {
-		if ( $v > $max_attempts ) {
-			notify('ssh', $k, $ssh_faults{$k});
-		}
+		notify('ssh', $k, $ssh_faults{$k}) if ( $v > $max_attempts );
 	}
 	while ( my ($k,$v) = each (%pop3_faults) ) {
-		if ( $v >= $max_attempts ) {
-			notify('pop3', $k, $v);
-		}
+		notify('pop3', $k, $v) if ( $v >= $max_attempts );
 	}
 	while ( my ($k,$v) = each (%imap_faults) ) {
-		if ( $v > $max_attempts ) {
-			notify('imap', $k, $imap_faults{$k});
-		}
+		notify('imap', $k, $imap_faults{$k}) if ( $v > $max_attempts );
 	}
 	while ( my ($k,$v) = each (%smtp_faults) ) {
-                if ( $v > $max_attempts ) {
-                        notify('imap', $k, $smtp_faults{$k});
-                }
-        }
+		notify('imap', $k, $smtp_faults{$k}) if ( $v > $max_attempts );
+	}
 	while ( my ($k,$v) = each (%cpanel_faults) ) {
-		if ( $v > $max_attempts ) {
-			notify('cPanel', $k, $cpanel_faults{$k});
-		}
+		notify('cPanel', $k, $cpanel_faults{$k}) if ( $v > $max_attempts );
 	}
 	while ( my ($k,$v) = each (%ftp_faults) ) {
-		if ( $v > $max_attempts ) {
-			notify('ftp', $k, $ftp_faults{$k});
-		}
+		notify('ftp', $k, $ftp_faults{$k}) if ( $v > $max_attempts );
 	}
 	while ( my ($k,$v) = each (%possible_attackers) ) {
 		if ( $possible_attackers{$k}[0] > 5 ) {
@@ -223,22 +210,6 @@ sub check_broot {
 			}
 		}
 	}
-
-
-# 	while ( my ($k,$v) = each (%possible_shitters) ) {
-# 		if ( $possible_shitters{$k}[0] > 5 ) {
-# 			if (defined($possible_shitters{$k}[3])) {
-# 				if ($possible_shitters{$k}[0] > 25 && $possible_shitters{$k}[3] < 3) {
-# 					$possible_shitters{$k}[3] = 6;
-# 					notify_hack("$hostname possible break in, ".$possible_shitters{$k}[0]." attempts with different VALID usernames from ip $k(".$possible_shitters{$k}[2].')');
-# 				}
-# 			} else {
-# 				notify_hack("$hostname possible break in, ".$possible_shitters{$k}[0]." attempts with different VALID usernames from ip $k(".$possible_shitters{$k}[2].')');
-# 				$possible_shitters{$k}[3] = 1;
-# 			}
-# 		}
-# 	}
-
 }
 
 # Fork to background
@@ -462,33 +433,6 @@ while (<LOGS>) {
 				$imap_faults{$imap[8]} = 1;
 			}
 			logger(" IP $imap[8]($imap[7]) failed to identify to courier-imap.") if ($debug);
-		# 	} elsif ( ( $_ =~ /pop3d/ || $_ =~ /imapd/ ) && $_ =~ /LOGIN,/ ) {
-		# 	# Aug 14 05:35:42 serv01 pop3d: LOGIN, user=info@webmatje.com, ip=[::ffff:78.20.185.245], port=[50157]	
-		# 	# Aug 14 11:53:13 serv01 imapd-ssl: LOGIN, user=mario@wineliteimports.com, ip=[::ffff:67.223.72.67], port=[35404],
-		# 	# Aug 14 11:53:37 serv01 imapd: LOGIN, user=michael@unce.us, ip=[::ffff:67.15.245.10], port=[42349], protocol=IMAP
-		# 		my @line = split /\s+/, $_;
-		# 		$line[6] =~ s/user=(.*),/$1/; 			# USERa
-		# 		$line[7] =~ s/ip=\[::ffff:(.*)\],/$1/;	# IP.*
-		# 		if ( exists $possible_shitters {$line[7]} && $possible_shitters{$line[7]}[1] ne $line[6] ) {
-		# 			$possible_shitters{$line[7]}[0]++;
-		# 			$possible_shitters{$line[7]}[1] = $line[6];
-		# 			logger("Possible attacker ".$possible_shitters{$line[6]}[0]." attempts with different usernames from ip ".$line[6]) if $debug;
-		# 		} else {
-		# 			$possible_shitters{$line[7]} = [ 0, $line[6], 'imap' ];
-		# 			logger("Possible attacker first attempt with different usernames from ip ".$line[6]) if $debug;
-		# 		}
-		# 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /is now logged in/ ) {
-		# 	# Aug 14 06:09:05 serv01 pure-ftpd: (?@85.107.173.46) [INFO] tolga@hellnewer.com is now logged in
-		# 		my @line = split /\s+/, $_;
-		# 		$line[5] =~ s/\(.*\@(.*)\)/$1/;	# IP.*
-		# 		if ( exists $possible_shitters {$line[5]} && $possible_shitters{$line[5]}[1] ne $line[6] ) {
-		# 			$possible_shitters{$line[5]}[0]++;
-		# 			$possible_shitters{$line[5]}[1] = $line[7];
-		# 			logger("Possible attacker ".$possible_shitters{$line[5]}[0]." attempts with different usernames from ip ".$line[5]) if $debug;
-		# 		} else {
-		# 			$possible_shitters{$line[5]} = [ 0, $line[7], 'imap' ];
-		# 			logger("Possible attacker first attempt with different usernames from ip ".$line[5]) if $debug;
-		# 		}
 		}
 	} else {
 		# cPanel IMAP & cPanel POP3
@@ -613,7 +557,6 @@ while (<LOGS>) {
 	my $passed_time = time() - $start_time;	# get the pssed time
 	if ($passed_time > $broot_time) {		# if the passed time is grater then $broot_time
 		cleanh();							# clean the hashes
-		clean_ips();						# clean the authenticated_ips_file
 		eval {
 			local $SIG{ALRM} = sub { die 'alarm'; };
 			alarm 2;
@@ -624,6 +567,12 @@ while (<LOGS>) {
 		};
 		$start_time = time();				# set the start_time to now
 	}
+	my $pop_passed_time = time() - $pop_time;
+	if ($pop_passed_time >= 60) {
+		clean_ips();				# clean the authenticated_ips_file
+		$pop_time = time();			# set the pop_time to now
+	}
+
 }
 close LOGS;
 close HAWK;
