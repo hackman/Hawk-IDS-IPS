@@ -16,7 +16,6 @@ our %imap_faults = ();		# imap faults storage
 our %smtp_faults = ();		# smtp faults storage
 our %cpanel_faults = ();	# cpanel faults storage
 our %notifications = ();	# notifications
-
 our %possible_attackers = ();	# possible hack attempts
 # our %possible_shitters = ();	# possible hack attempts
 
@@ -34,7 +33,9 @@ our $broot_time = 300;	# time(in seconds) before cleaning the hashes
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 our $debug = 0;			# by default debuging is OFF
 our $do_limit = 0;		# by default do not limit the offending IPs
-
+our $authenticated_ips_file = '/etc/relayhosts';	# Authenticated to Dovecot IPs are stored here
+my $courier_imap = 0;
+my $dovecot = 0;
 my $hostname = '';
 my $start_time = time();
 my $myip = get_ip();
@@ -45,11 +46,24 @@ if ( defined($ARGV[0]) && $ARGV[0] =~ /debug/ ) {
 	$debug=1;		# turn on debuging
 }
 
-open HOST, '<', '/proc/sys/kernel/hostname';
+open HOST, '<', '/proc/sys/kernel/hostname' or die "Unable to open hostname file: $!\n";
 $hostname = <HOST>;
 close HOST;
 $hostname =~ s/[\r|\n]//;
 
+open EXIM, '<', '' or die "Unable to open exim.conf: $!\n";
+while (<EXIM>) {
+	if ($_ =~ /maildir/) {
+		$courier_imap = 1;
+		last;
+	}
+}
+close EXIM;
+
+if ( -f '/etc/dovecot.conf' ) {
+	$courier_imap = 0;
+	$dovecot = 1;
+}
 # changing to unbuffered output
 our $| = 1;
 
@@ -118,15 +132,27 @@ sub logger {
 
 # clean the hashes
 sub cleanh {
-        	delete @ftp_faults{keys %ftp_faults};
-        	delete @ssh_faults{keys %ssh_faults};
-        	delete @pop3_faults{keys %pop3_faults};
-        	delete @imap_faults{keys %imap_faults};
-        	delete @cpanel_faults{keys %cpanel_faults};
-        	delete @notifications{keys %notifications};
-		logger("hashes cleaned!");
+	delete @ftp_faults{keys %ftp_faults};
+	delete @ssh_faults{keys %ssh_faults};
+	delete @pop3_faults{keys %pop3_faults};
+	delete @imap_faults{keys %imap_faults};
+	delete @cpanel_faults{keys %cpanel_faults};
+	delete @notifications{keys %notifications};
+	logger("hashes cleaned!");
 }
 
+sub save_ip {
+	my $ip = shift;
+	open AUTH, '>>', $authenticated_ips_file;
+	print AUTH $ip, "\n";
+	close AUTH;
+}
+
+sub clean_ips {
+	open AUTH, '>', $authenticated_ips_file;
+	print AUTH '';
+	close AUTH;
+}
 # check for broots
 sub check_broot {
 # 	foreach ( keys %ssh_faults ) {
@@ -330,6 +356,173 @@ sub send_fault() {
 
 our @senders = ();
 while (<LOGS>) {
+	if ($dovecot) {
+		# Dovecot IMAP & POP3
+		if ($_ =~ /pop3-login:/) {
+			my @pop3 = split /\s+/, $_;
+			if ($pop3[10] eq 'Login') {
+			# Jan 27 23:06:03 serv01 dovecot: pop3-login: user=<pelletsqa@leepharma.com>, method=PLAIN, rip=121.243.129.200, lip=67.15.172.13 Login
+				$pop3[8] =~ s/rip=(.*),/$1/;
+				save_ip($pop3[8]);
+			} else {
+			#Jan 27 23:09:37 serv01 dovecot: pop3-login: user=<aaa>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.13 Aborted login (auth failed, 8 attempts)
+				$pop3[8] =~ s/rip=(.*),/$1/;
+				$pop3[6] =~ s/user=<(.*)>,/$1/;
+				next if ( $pop3[8] =~ /$myip/ );	# this is the local server
+				if ( exists $possible_attackers {$pop3[8]} && $possible_attackers{$pop3[8]}[1] ne $pop3[6] ) {
+					$possible_attackers{$pop3[8]}[0] = $possible_attackers{$pop3[8]}[0] + $pop3[14];
+					$possible_attackers{$pop3[8]}[1] = $pop3[6];
+					logger("Possible attacker ".$possible_attackers{$pop3[8]}[0]." attempts with different usernames from ip ".$pop3[8]) if $debug;
+				} else {
+					$possible_attackers{$pop3[8]} = [ $pop3[14], $pop3[6], 'pop3' ];
+					logger("Possible attacker first attempt with different usernames from ip ".$pop3[8]) if $debug;
+				}
+				$log_me->execute($pop3[8], $pop3[6], 'pop3');
+				if ( exists $pop3_faults {$pop3[8]} ) {
+					$pop3_faults{$pop3[8]} = $pop3_faults{$pop3[8]} + $pop3[14];
+				} else {
+					$pop3_faults{$pop3[8]} = $pop3[14];
+				}
+				logger("IP $pop3[8]($pop3[6]) faild to identify to dovecot-pop3 $pop3[14] times") if ($debug);
+			}
+		} elsif ($_ =~ /imap-login/ ) {
+		#Jan 27 23:24:28 serv01 dovecot: imap-login: user=<user>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.13 Aborted login (auth failed, 1 attempts)
+			my @imap = split /\s+/, $_;
+			if ($imap[11] eq 'Login') {
+			# Jan 27 23:31:26 serv01 dovecot: imap-login: user=<m.harrington@okemomountainschool.org>, method=PLAIN, rip=67.223.78.73, lip=67.15.172.13, TLS Login
+			# Jan 27 23:31:52 serv01 dovecot: imap-login: user=<m.harrington@okemomountainschool.org>, method=PLAIN, rip=67.15.172.13, lip=67.15.172.13, secured Login
+				$imap[8] =~ s/rip=(.*),/$1/;
+				save_ip($imap[8]);
+			} else {
+			# Jan 27 23:33:24 serv01 dovecot: imap-login: user=<test>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.13 Aborted login (auth failed, 3 attempts)
+				$imap[8] =~ s/rip=(.*),/$1/;
+				$imap[6] =~ s/user=<(.*)>,/$1/;
+				next if ( $imap[8] =~ /$myip/ );	# this is the local server
+				if ( exists $possible_attackers {$imap[8]} && $possible_attackers{$imap[8]}[1] ne $imap[6] ) {
+					$possible_attackers{$imap[8]}[0] = $possible_attackers{$imap[8]}[0] + $imap[14];
+					$possible_attackers{$imap[8]}[1] = $imap[6];
+					logger("Possible attacker ".$possible_attackers{$imap[8]}[0]." attempts with different usernames from ip ".$imap[8]) if $debug;
+				} else {
+					$possible_attackers{$imap[8]} = [ $imap[14], $imap[6], 'imap' ];
+					logger("Possible attacker first attempt with different usernames from ip ".$imap[8]) if $debug;
+				}
+				$log_me->execute($imap[8], $imap[6], 'imap');
+				if ( exists $imap_faults {$imap[8]} ) {
+					$imap_faults{$imap[8]} = $imap_faults{$imap[8]} + $imap[14];
+				} else {
+					$imap_faults{$imap[8]} = $imap[14];
+				}
+				logger("IP $imap[8]($imap[6]) faild to identify to dovecot-pop3 $imap[14] times") if ($debug);
+			}
+		}
+	} elsif ($courier_imap) {
+		# Courier IMAP & POP3
+		if ( $_ =~ /pop3d:/ && $_ =~ /FAILED/ ) {
+		# Courier POP3
+		#May 11 03:58:40 serv01 pop3d: LOGIN FAILED, user=kate, ip=[::ffff:72.43.28.210]
+			my @pop3 = split /\s+/, $_;
+			$pop3[8] =~ s/ip=\[(.*)\]/$1/;
+			$pop3[7] =~ s/user=(.*),/$1/;
+			$pop3[8] =~ s/.*:// if $pop3[8] =~ /ffff/;
+			next if ( $pop3[8] =~ /$myip/ );	# this is the local server
+			if ( exists $possible_attackers {$pop3[8]} && $possible_attackers{$pop3[8]}[1] ne $pop3[7] ) {
+				$possible_attackers{$pop3[8]}[0]++;
+				$possible_attackers{$pop3[8]}[1] = $pop3[7];
+				logger("Possible attacker ".$possible_attackers{$pop3[8]}[0]." attempts with different usernames from ip ".$pop3[8]) if $debug;
+			} else {
+				$possible_attackers{$pop3[8]} = [ 0, $pop3[7], 'pop3' ];
+				logger("Possible attacker first attempt with different usernames from ip ".$pop3[8]) if $debug;
+			}
+			$log_me->execute($pop3[8], $pop3[7], 'pop3');
+			if ( exists $pop3_faults {$pop3[8]} ) {
+				$pop3_faults{$pop3[8]}++;
+			} else {
+				$pop3_faults{$pop3[8]} = 1;
+			}
+			logger("IP $pop3[8]($pop3[7]) faild to identify to courier-pop3") if ($debug);
+		} elsif ( $_ =~ /imapd/ && $_ =~ /FAILED/ ) {
+		# Courier IMAP
+		#May 15 05:26:16 serv01 imapd: LOGIN FAILED, user=admin, ip=[::ffff:67.15.243.20]
+			my @imap = split /\s+/, $_;
+			$imap[8] =~ s/host=\[::ffff:(.*)\]/$1/;
+			$imap[7] =~ s/user=//;
+			next if ( $imap[8] =~ /$myip/ );	# this is the local server
+			if ( exists $possible_attackers {$imap[8]} && $possible_attackers{$imap[8]}[1] ne $imap[7] ) {
+				$possible_attackers{$imap[8]}[0]++;
+				$possible_attackers{$imap[8]}[1] = $imap[7];
+				logger("Possible attacker ".$possible_attackers{$imap[8]}[0]." attempts with different usernames from ip ".$imap[8]) if $debug;
+			} else {
+				$possible_attackers{$imap[8]} = [ 0, $imap[7], 'imap' ];
+				logger("Possible attacker first attempt with different usernames from ip ".$imap[8]) if $debug;
+			}
+			$log_me->execute($imap[8], $imap[7], 'imap');
+			if ( exists $imap_faults {$imap[8]} ) {
+				$imap_faults{$imap[8]}++;
+			} else {
+				$imap_faults{$imap[8]} = 1;
+			}
+			logger(" IP $imap[8]($imap[7]) failed to identify to courier-imap.") if ($debug);
+		# 	} elsif ( ( $_ =~ /pop3d/ || $_ =~ /imapd/ ) && $_ =~ /LOGIN,/ ) {
+		# 	# Aug 14 05:35:42 serv01 pop3d: LOGIN, user=info@webmatje.com, ip=[::ffff:78.20.185.245], port=[50157]	
+		# 	# Aug 14 11:53:13 serv01 imapd-ssl: LOGIN, user=mario@wineliteimports.com, ip=[::ffff:67.223.72.67], port=[35404],
+		# 	# Aug 14 11:53:37 serv01 imapd: LOGIN, user=michael@unce.us, ip=[::ffff:67.15.245.10], port=[42349], protocol=IMAP
+		# 		my @line = split /\s+/, $_;
+		# 		$line[6] =~ s/user=(.*),/$1/; 			# USERa
+		# 		$line[7] =~ s/ip=\[::ffff:(.*)\],/$1/;	# IP.*
+		# 		if ( exists $possible_shitters {$line[7]} && $possible_shitters{$line[7]}[1] ne $line[6] ) {
+		# 			$possible_shitters{$line[7]}[0]++;
+		# 			$possible_shitters{$line[7]}[1] = $line[6];
+		# 			logger("Possible attacker ".$possible_shitters{$line[6]}[0]." attempts with different usernames from ip ".$line[6]) if $debug;
+		# 		} else {
+		# 			$possible_shitters{$line[7]} = [ 0, $line[6], 'imap' ];
+		# 			logger("Possible attacker first attempt with different usernames from ip ".$line[6]) if $debug;
+		# 		}
+		# 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /is now logged in/ ) {
+		# 	# Aug 14 06:09:05 serv01 pure-ftpd: (?@85.107.173.46) [INFO] tolga@hellnewer.com is now logged in
+		# 		my @line = split /\s+/, $_;
+		# 		$line[5] =~ s/\(.*\@(.*)\)/$1/;	# IP.*
+		# 		if ( exists $possible_shitters {$line[5]} && $possible_shitters{$line[5]}[1] ne $line[6] ) {
+		# 			$possible_shitters{$line[5]}[0]++;
+		# 			$possible_shitters{$line[5]}[1] = $line[7];
+		# 			logger("Possible attacker ".$possible_shitters{$line[5]}[0]." attempts with different usernames from ip ".$line[5]) if $debug;
+		# 		} else {
+		# 			$possible_shitters{$line[5]} = [ 0, $line[7], 'imap' ];
+		# 			logger("Possible attacker first attempt with different usernames from ip ".$line[5]) if $debug;
+		# 		}
+		}
+	} else {
+		# cPanel IMAP & cPanel POP3
+		if ( $_ =~ /cpanelpop/ && $_ =~ /totalxfer=102\s*$/ ) {
+		#May 16 02:37:31 serv01 cpanelpop[29746]: Session Closed host=67.15.172.8 ip=67.15.172.8 user=root realuser= totalxfer=102
+			my @pop3 = split /\s+/, $_;
+			if ( defined($pop3[10]) && $pop3[10] =~  /realuser=/ ) {
+				$pop3[7] =~ s/host=//;
+				next if ( $pop3[7] =~ /$myip/ ); # this is the local server
+				$log_me->execute($pop3[7], '', 'pop3') or logger("Failed to insert: $pop3[7], $DBI::errstr");
+				if ( exists $pop3_faults {$pop3[7]} ) {
+					$pop3_faults{$pop3[7]}++;
+				} else {
+					$pop3_faults{$pop3[7]} = 1;
+				}
+				logger("IP $pop3[7] faild to identify to cppop") if ($debug);
+			}
+		} elsif ( $_ =~ /imapd/ && $_ =~ /failed/ ) {
+		# cPanel IMAP
+		#May 17 17:06:44 serv01 imapd[32199]: Login failed user=dsada domain=(null) auth=dsada host=[85.14.6.2]
+			my @imap = split /\s+/, $_;
+			$imap[10] =~ s/host=\[(.*)\]/$1/;
+			$imap[7] =~ s/user=//;
+			next if ( $imap[10] =~ /$myip/ );	# this is the local server
+			$log_me->execute($imap[10], $imap[7], 'imap');
+			if ( exists $imap_faults {$imap[10]} ) {
+				$imap_faults{$imap[10]}++;
+			} else {
+				$imap_faults{$imap[10]} = 1;
+			}
+			logger("IP $imap[10]($imap[7]) failed to identify to cpimap.") if ($debug);
+		}
+	}
+
 	# Feb 13 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
 	# Feb 13 19:18:58 serv01 kernel: end_request: I/O error, dev sdb, sector 1405727387 
 	if ( $_ =~ /I\/O error/i ) {
@@ -377,106 +570,6 @@ while (<LOGS>) {
 			$ssh_faults{$ip} = 1;
 		}
 		logger(" IP $ip failed to identify to ssh.") if ($debug);
-    } elsif ( $_ =~ /cpanelpop/ && $_ =~ /totalxfer=102\s*$/ ) {
-	#May 16 02:37:31 serv01 cpanelpop[29746]: Session Closed host=67.15.172.8 ip=67.15.172.8 user=root realuser= totalxfer=102
-		my @pop3 = split /\s+/, $_;
-        if ( defined($pop3[10]) && $pop3[10] =~  /realuser=/ ) {
-			$pop3[7] =~ s/host=//;
-			next if ( $pop3[7] =~ /$myip/ ); # this is the local server
-			$log_me->execute($pop3[7], '', 'pop3') or logger("Failed to insert: $pop3[7], $DBI::errstr");
-			if ( exists $pop3_faults {$pop3[7]} ) {
-				$pop3_faults{$pop3[7]}++;
-			} else {
-				$pop3_faults{$pop3[7]} = 1;
-			}
-			logger("IP $pop3[7] faild to identify to cppop") if ($debug);
-		}
-	} elsif ( $_ =~ /pop3d:/ && $_ =~ /FAILED/ ) {
-	# Courier POP3
-	#May 11 03:58:40 serv01 pop3d: LOGIN FAILED, user=kate, ip=[::ffff:72.43.28.210]
-		my @pop3 = split /\s+/, $_;
-		$pop3[8] =~ s/ip=\[(.*)\]/$1/;
-		$pop3[7] =~ s/user=(.*),/$1/;
-		$pop3[8] =~ s/.*:// if $pop3[8] =~ /ffff/;
-		next if ( $pop3[8] =~ /$myip/ );	# this is the local server
-		if ( exists $possible_attackers {$pop3[8]} && $possible_attackers{$pop3[8]}[1] ne $pop3[7] ) {
-			$possible_attackers{$pop3[8]}[0]++;
-			$possible_attackers{$pop3[8]}[1] = $pop3[7];
-			logger("Possible attacker ".$possible_attackers{$pop3[8]}[0]." attempts with different usernames from ip ".$pop3[8]) if $debug;
-		} else {
-			$possible_attackers{$pop3[8]} = [ 0, $pop3[7], 'pop3' ];
-			logger("Possible attacker first attempt with different usernames from ip ".$pop3[8]) if $debug;
-		}
-		$log_me->execute($pop3[8], $pop3[7], 'pop3');
-		if ( exists $pop3_faults {$pop3[8]} ) {
-			$pop3_faults{$pop3[8]}++;
-		} else {
-			$pop3_faults{$pop3[8]} = 1;
-		}
-		logger("IP $pop3[8]($pop3[7]) faild to identify to courier-pop3") if ($debug);
-	} elsif ( $_ =~ /imapd/ && $_ =~ /failed/ ) {
-	# cPanel IMAP
-	#May 17 17:06:44 serv01 imapd[32199]: Login failed user=dsada domain=(null) auth=dsada host=[85.14.6.2]
-	    my @imap = split /\s+/, $_;
-		$imap[10] =~ s/host=\[(.*)\]/$1/;
-		$imap[7] =~ s/user=//;
-		next if ( $imap[10] =~ /$myip/ );	# this is the local server
-		$log_me->execute($imap[10], $imap[7], 'imap');
-		if ( exists $imap_faults {$imap[10]} ) {
-			$imap_faults{$imap[10]}++;
-		} else {
-			$imap_faults{$imap[10]} = 1;
-		}
-		logger("IP $imap[10]($imap[7]) failed to identify to cpimap.") if ($debug);
-	} elsif ( $_ =~ /imapd/ && $_ =~ /FAILED/ ) {
-	# Courier IMAP
-	#May 15 05:26:16 serv01 imapd: LOGIN FAILED, user=admin, ip=[::ffff:67.15.243.20]
-	    my @imap = split /\s+/, $_;
-		$imap[8] =~ s/host=\[::ffff:(.*)\]/$1/;
-		$imap[7] =~ s/user=//;
-		next if ( $imap[8] =~ /$myip/ );	# this is the local server
-		if ( exists $possible_attackers {$imap[8]} && $possible_attackers{$imap[8]}[1] ne $imap[7] ) {
-			$possible_attackers{$imap[8]}[0]++;
-			$possible_attackers{$imap[8]}[1] = $imap[7];
-			logger("Possible attacker ".$possible_attackers{$imap[8]}[0]." attempts with different usernames from ip ".$imap[8]) if $debug;
-		} else {
-			$possible_attackers{$imap[8]} = [ 0, $imap[7], 'imap' ];
-			logger("Possible attacker first attempt with different usernames from ip ".$imap[8]) if $debug;
-		}
-		$log_me->execute($imap[8], $imap[7], 'imap');
-		if ( exists $imap_faults {$imap[8]} ) {
-			$imap_faults{$imap[8]}++;
-		} else {
-			$imap_faults{$imap[8]} = 1;
-		}
-		logger(" IP $imap[8]($imap[7]) failed to identify to courier-imap.") if ($debug);
-# 	} elsif ( ( $_ =~ /pop3d/ || $_ =~ /imapd/ ) && $_ =~ /LOGIN,/ ) {
-# 	# Aug 14 05:35:42 serv01 pop3d: LOGIN, user=info@webmatje.com, ip=[::ffff:78.20.185.245], port=[50157]	
-# 	# Aug 14 11:53:13 serv01 imapd-ssl: LOGIN, user=mario@wineliteimports.com, ip=[::ffff:67.223.72.67], port=[35404],
-# 	# Aug 14 11:53:37 serv01 imapd: LOGIN, user=michael@unce.us, ip=[::ffff:67.15.245.10], port=[42349], protocol=IMAP
-# 		my @line = split /\s+/, $_;
-# 		$line[6] =~ s/user=(.*),/$1/; 			# USERa
-# 		$line[7] =~ s/ip=\[::ffff:(.*)\],/$1/;	# IP.*
-# 		if ( exists $possible_shitters {$line[7]} && $possible_shitters{$line[7]}[1] ne $line[6] ) {
-# 			$possible_shitters{$line[7]}[0]++;
-# 			$possible_shitters{$line[7]}[1] = $line[6];
-# 			logger("Possible attacker ".$possible_shitters{$line[6]}[0]." attempts with different usernames from ip ".$line[6]) if $debug;
-# 		} else {
-# 			$possible_shitters{$line[7]} = [ 0, $line[6], 'imap' ];
-# 			logger("Possible attacker first attempt with different usernames from ip ".$line[6]) if $debug;
-# 		}
-# 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /is now logged in/ ) {
-# 	# Aug 14 06:09:05 serv01 pure-ftpd: (?@85.107.173.46) [INFO] tolga@hellnewer.com is now logged in
-# 		my @line = split /\s+/, $_;
-# 		$line[5] =~ s/\(.*\@(.*)\)/$1/;	# IP.*
-# 		if ( exists $possible_shitters {$line[5]} && $possible_shitters{$line[5]}[1] ne $line[6] ) {
-# 			$possible_shitters{$line[5]}[0]++;
-# 			$possible_shitters{$line[5]}[1] = $line[7];
-# 			logger("Possible attacker ".$possible_shitters{$line[5]}[0]." attempts with different usernames from ip ".$line[5]) if $debug;
-# 		} else {
-# 			$possible_shitters{$line[5]} = [ 0, $line[7], 'imap' ];
-# 			logger("Possible attacker first attempt with different usernames from ip ".$line[5]) if $debug;
-# 		}
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
 	# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
 	# Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
@@ -520,6 +613,7 @@ while (<LOGS>) {
 	my $passed_time = time() - $start_time;	# get the pssed time
 	if ($passed_time > $broot_time) {		# if the passed time is grater then $broot_time
 		cleanh();							# clean the hashes
+		clean_ips();						# clean the authenticated_ips_file
 		eval {
 			local $SIG{ALRM} = sub { die 'alarm'; };
 			alarm 2;
