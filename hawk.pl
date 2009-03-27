@@ -146,10 +146,15 @@ sub cleanh {
 
 sub save_ip {
 	my $ip = shift;
-	$authenticated_ips{$ip} = time();
-	open AUTH, '>>', $authenticated_ips_file;
-	print AUTH $ip, "\n";
-	close AUTH;
+	if (!defined $authenticated_ips{$ip}) {
+		logger("New pop3/imap authenticated IP ... adding it to the list") if ($debug);
+		$authenticated_ips{$ip} = time();
+		open AUTH, '>>', $authenticated_ips_file;
+		print AUTH $ip, "\n";
+		close AUTH;
+	} else {
+		logger("The hash for $ip already exists. This means that the IP is already added to the popbeforesmtp file ... skipping it!") if ($debug);
+	}
 }
 
 sub clean_ips {
