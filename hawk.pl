@@ -54,7 +54,7 @@ $hostname = <HOST>;
 close HOST;
 $hostname =~ s/[\r|\n]//;
 
-open EXIM, '<', '' or die "Unable to open exim.conf: $!\n";
+open EXIM, '<', '/etc/exim.conf' or die "Unable to open exim.conf: $!\n";
 while (<EXIM>) {
 	if ($_ =~ /maildir/) {
 		$courier_imap = 1;
