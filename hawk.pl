@@ -23,7 +23,7 @@ our %authenticated_ips = ();	# authenticated_ips storage
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
 my $user	= 'hawk';
-my $pass	= '157856cc61d4';
+my $pass	= 'df3ab6a04331';
 
 # Hawk files
 my $logfile = '/var/log//hawk.log';	# daemon logfile
@@ -32,7 +32,7 @@ my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamp
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
-our $debug = 0;			# by default debuging is OFF
+our $debug = 1;			# by default debuging is OFF
 our $do_limit = 0;		# by default do not limit the offending IPs
 our $authenticated_ips_file = '/etc/relayhosts';	# Authenticated to Dovecot IPs are stored here
 my $courier_imap = 0;
@@ -147,7 +147,7 @@ sub cleanh {
 sub save_ip {
 	my $ip = shift;
 	if (!defined $authenticated_ips{$ip}) {
-		logger("New pop3/imap authenticated IP ... adding it to the list") if ($debug);
+		logger("New pop3/imap authenticated IP $ip ... adding it to the list") if ($debug);
 		$authenticated_ips{$ip} = time();
 		open AUTH, '>>', $authenticated_ips_file;
 		print AUTH $ip, "\n";
@@ -169,18 +169,21 @@ sub clean_ips {
 		}
 	}
 	# now get the file into a string
-	open AUTH, '<', $authenticated_ips_file;
-	my $auth = <AUTH>;
-	close AUTH;
-	# write the new file without the ips from @to_be_removed
-	open AUTH, '>', $authenticated_ips_file;
-	while ( <AUTH> ) {
-		foreach my $ip (@to_be_removed) {
-			next if ($_ =~ /$ip/);
+	if (open AUTH, '<', $authenticated_ips_file) {
+		my $auth = <AUTH>;
+		close AUTH;
+		# write the new file without the ips from @to_be_removed
+		open AUTH, '>', $authenticated_ips_file;
+		while ( <AUTH> ) {
+			foreach my $ip (@to_be_removed) {
+				next if ($_ =~ /$ip/);
+			}
+			print AUTH $_;
 		}
-		print AUTH $_;
+		close AUTH;
+	} else {
+ 		logger("I was unable to open $authenticated_ips_file");
 	}
-	close AUTH;
 }
 # check for broots
 sub check_broot {
@@ -336,59 +339,59 @@ while (<LOGS>) {
 		# Dovecot IMAP & POP3
 		if ($_ =~ /pop3-login:/) {
 			my @pop3 = split /\s+/, $_;
-			if ($pop3[10] eq 'Login') {
+			if (defined $pop3[10] && $pop3[10] eq 'Login') {
 			# Jan 27 23:06:03 serv01 dovecot: pop3-login: user=<pelletsqa@leepharma.com>, method=PLAIN, rip=121.243.129.200, lip=67.15.172.13 Login
 				$pop3[8] =~ s/rip=(.*),/$1/;
 				save_ip($pop3[8]);
-			} else {
+			} elsif ($_ =~ /auth failed/) {
 			#Jan 27 23:09:37 serv01 dovecot: pop3-login: user=<aaa>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.13 Aborted login (auth failed, 8 attempts)
 				$pop3[8] =~ s/rip=(.*),/$1/;
 				$pop3[6] =~ s/user=<(.*)>,/$1/;
 				next if ( $pop3[8] =~ /$myip/ );	# this is the local server
 				if ( exists $possible_attackers {$pop3[8]} && $possible_attackers{$pop3[8]}[1] ne $pop3[6] ) {
-					$possible_attackers{$pop3[8]}[0] = $possible_attackers{$pop3[8]}[0] + $pop3[14];
+					$possible_attackers{$pop3[8]}[0] = $possible_attackers{$pop3[8]}[0] + $pop3[13];
 					$possible_attackers{$pop3[8]}[1] = $pop3[6];
 					logger("Possible attacker ".$possible_attackers{$pop3[8]}[0]." attempts with different usernames from ip ".$pop3[8]) if $debug;
 				} else {
-					$possible_attackers{$pop3[8]} = [ $pop3[14], $pop3[6], 'pop3' ];
+					$possible_attackers{$pop3[8]} = [ $pop3[13], $pop3[6], 'pop3' ];
 					logger("Possible attacker first attempt with different usernames from ip ".$pop3[8]) if $debug;
 				}
 				$log_me->execute($pop3[8], $pop3[6], 'pop3');
 				if ( exists $pop3_faults {$pop3[8]} ) {
-					$pop3_faults{$pop3[8]} = $pop3_faults{$pop3[8]} + $pop3[14];
+					$pop3_faults{$pop3[8]} = $pop3_faults{$pop3[8]} + $pop3[13];
 				} else {
-					$pop3_faults{$pop3[8]} = $pop3[14];
+					$pop3_faults{$pop3[8]} = $pop3[13];
 				}
-				logger("IP $pop3[8]($pop3[6]) faild to identify to dovecot-pop3 $pop3[14] times") if ($debug);
+				logger("IP $pop3[8]($pop3[6]) faild to identify to dovecot-pop3 $pop3[13] times") if ($debug);
 			}
 		} elsif ($_ =~ /imap-login/ ) {
 		#Jan 27 23:24:28 serv01 dovecot: imap-login: user=<user>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.13 Aborted login (auth failed, 1 attempts)
 			my @imap = split /\s+/, $_;
-			if ($imap[11] eq 'Login') {
+			if (defined $imap[11] && $imap[11] eq 'Login') {
 			# Jan 27 23:31:26 serv01 dovecot: imap-login: user=<m.harrington@okemomountainschool.org>, method=PLAIN, rip=67.223.78.73, lip=67.15.172.13, TLS Login
 			# Jan 27 23:31:52 serv01 dovecot: imap-login: user=<m.harrington@okemomountainschool.org>, method=PLAIN, rip=67.15.172.13, lip=67.15.172.13, secured Login
 				$imap[8] =~ s/rip=(.*),/$1/;
 				save_ip($imap[8]);
-			} else {
+			} elsif ($_ =~ /auth failed/) {
 			# Jan 27 23:33:24 serv01 dovecot: imap-login: user=<test>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.13 Aborted login (auth failed, 3 attempts)
 				$imap[8] =~ s/rip=(.*),/$1/;
 				$imap[6] =~ s/user=<(.*)>,/$1/;
 				next if ( $imap[8] =~ /$myip/ );	# this is the local server
 				if ( exists $possible_attackers {$imap[8]} && $possible_attackers{$imap[8]}[1] ne $imap[6] ) {
-					$possible_attackers{$imap[8]}[0] = $possible_attackers{$imap[8]}[0] + $imap[14];
+					$possible_attackers{$imap[8]}[0] = $possible_attackers{$imap[8]}[0] + $imap[13];
 					$possible_attackers{$imap[8]}[1] = $imap[6];
 					logger("Possible attacker ".$possible_attackers{$imap[8]}[0]." attempts with different usernames from ip ".$imap[8]) if $debug;
 				} else {
-					$possible_attackers{$imap[8]} = [ $imap[14], $imap[6], 'imap' ];
+					$possible_attackers{$imap[8]} = [ $imap[13], $imap[6], 'imap' ];
 					logger("Possible attacker first attempt with different usernames from ip ".$imap[8]) if $debug;
 				}
 				$log_me->execute($imap[8], $imap[6], 'imap');
 				if ( exists $imap_faults {$imap[8]} ) {
-					$imap_faults{$imap[8]} = $imap_faults{$imap[8]} + $imap[14];
+					$imap_faults{$imap[8]} = $imap_faults{$imap[8]} + $imap[13];
 				} else {
-					$imap_faults{$imap[8]} = $imap[14];
+					$imap_faults{$imap[8]} = $imap[13];
 				}
-				logger("IP $imap[8]($imap[6]) faild to identify to dovecot-pop3 $imap[14] times") if ($debug);
+				logger("IP $imap[8]($imap[6]) faild to identify to dovecot-pop3 $imap[13] times") if ($debug);
 			}
 		}
 	} elsif ($courier_imap) {
