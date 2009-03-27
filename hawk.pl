@@ -29,7 +29,7 @@ my $pass	= '157856cc61d4';
 my $logfile = '/var/log//hawk.log';	# daemon logfile
 my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
 my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamps for I/O Errors
-my $log_list = '/usr/bin/tail -f /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
+my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 our $debug = 0;			# by default debuging is OFF
