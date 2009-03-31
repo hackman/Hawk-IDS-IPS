@@ -26,7 +26,7 @@ my $user	= 'hawk';
 my $pass	= '6d27241ee05c';
 
 # Hawk files
-my $logfile = '/var/log//hawk.log';	# daemon logfile
+my $logfile = '/var/log/hawk.log';	# daemon logfile
 my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
 my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamps for I/O Errors
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
