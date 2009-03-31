@@ -77,11 +77,11 @@ check_run() {
 # change the DB password for all hawk tools
 change_hawk_pass() {
 	echo "Changing Hawk password"
-        newpass=`echo $RANDOM|md5sum|cut -c 1-12`
-        echo "New password: $newpass"
-        psql -Upostgres -c "ALTER USER hawk PASSWORD '$newpass'" template1
-		sed -i '/hawk/D' ~/.pgpass
-        echo "*:5432:hawk:hawk:$newpass" >> ~/.pgpass
+	newpass=`echo $RANDOM|md5sum|cut -c 1-12`
+	echo "New password: $newpass"
+	psql -Upostgres -c "ALTER USER hawk PASSWORD '$newpass'" template1
+	sed -i '/hawk/D' ~/.pgpass
+	echo "*:5432:hawk:hawk:$newpass" >> ~/.pgpass
 	if ( ! grep hawk /var/lib/pgsql/data/pg_hba.conf > /dev/null ); then
 		sed -i "/^local\s\+all\s\+all\s\+ident\s\+sameuser/ihost hawk hawk 127.0.0.1 md5" /var/lib/pgsql/data/pg_hba.conf 
 		/etc/init.d/postgresql reload
