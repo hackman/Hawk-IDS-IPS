@@ -66,9 +66,9 @@ for i in $ip_list; do
 	if [ "$count" -gt "$max_attempts" ] && (check_ip $ip); then
 		if (log_block $ip); then
 			echo "iptables -I in_sg -j DROP -s $ip"
-	        sed -i  "/HAWK-BLOCKED/aiptables -I in_sg -j DROP -s $ip" /root/admin/sgfirewall
+			sed -i  "/HAWK-BLOCKED/aiptables -I in_sg -j DROP -s $ip" /root/admin/sgfirewall
 			echo "$ip|$(date +%F-%T)|Blocked by hawk" >> /home/sentry/blocked_ips
-	        iptables -I in_sg -j DROP -s $ip
+			iptables -I in_sg -j DROP -s $ip
 		fi
 	fi
 done
