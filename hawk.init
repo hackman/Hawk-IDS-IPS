@@ -79,7 +79,7 @@ change_hawk_pass() {
 	echo "Changing Hawk password"
         newpass=`echo $RANDOM|md5sum|cut -c 1-12`
         echo "New password: $newpass"
-        su - postgres -c "psql -c \"ALTER USER hawk PASSWORD '$newpass'\" template1"
+        psql -Upostgres -c "ALTER USER hawk PASSWORD '$newpass'" template1
 		sed -i '/hawk/D' ~/.pgpass
         echo "*:5432:hawk:hawk:$newpass" >> ~/.pgpass
 	if ( ! grep hawk /var/lib/pgsql/data/pg_hba.conf > /dev/null ); then
@@ -88,6 +88,7 @@ change_hawk_pass() {
 	fi
 	chmod 600 ~/.pgpass
     sed -i "/^my \$pass/s/=.*/= '$newpass';/" /usr/local/sbin/hawk.pl
+    sed -i "/^my \$dbpass/s/=.*/= '$newpass';/" /etc/sgmail/eq.pl
 	sed -i "/dbpass/s/=.*/=$newpass/" /home/sentry/hackman/hawk-web.conf
     stop_program
     sleep 1

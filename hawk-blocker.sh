@@ -7,7 +7,7 @@ max_attempts=2
 ip_list=`psql -n -t -A -Upostgres hawk -c "SELECT ip FROM broots WHERE \"date\" > (now() - interval '2 hour') ORDER BY ip ASC"|uniq -c|sed 's/\s\+/\|/g'`
 
 # define protected IP ranges
-sg_nets='127.0.0.1 70.84.112.90 67.15.187.4 64.246.15.53 67.15.157 67.15.172 67.15.211 67.15.243 67.15.245 67.15.250 67.15.255 216.40.199 207.218.208'
+sg_nets='127.0.0.1 70.84.112.90 67.15.187.4 74.55.65.222 67.15.157 67.15.172 67.15.211 67.15.243 67.15.245 67.15.250 67.15.255 216.40.199 207.218.208 87.118.135'
 
 # check if the requested IP is not from our IP ranges
 function check_ip() {
@@ -32,6 +32,7 @@ function white_list() {
 		echo "Removing $ip($id) from DB and firewall"
 		psql -Upostgres hawk -c "UPDATE blacklist set date_rem=now() WHERE id = '$id'"
 		sed -i "/in_sg.*$ip/D" /root/admin/sgfirewall
+		sed -i "/$ip/D" /home/sentry/blocked_ips
 		iptables -D in_sg -j DROP -s $ip
 	done
 }
@@ -65,8 +66,9 @@ for i in $ip_list; do
 	if [ "$count" -gt "$max_attempts" ] && (check_ip $ip); then
 		if (log_block $ip); then
 			echo "iptables -I in_sg -j DROP -s $ip"
-		        sed -i  "/HAWK-BLOCKED/aiptables -I in_sg -j DROP -s $ip" /root/admin/sgfirewall
-		        iptables -I in_sg -j DROP -s $ip
+	        sed -i  "/HAWK-BLOCKED/aiptables -I in_sg -j DROP -s $ip" /root/admin/sgfirewall
+			echo "$ip|$(date +%F-%T)|Blocked by hawk" >> /home/sentry/blocked_ips
+	        iptables -I in_sg -j DROP -s $ip
 		fi
 	fi
 done
