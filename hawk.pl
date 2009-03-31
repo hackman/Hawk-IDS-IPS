@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.79';	# version string
+my $version = '0.80';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -23,7 +23,7 @@ our %authenticated_ips = ();	# authenticated_ips storage
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
 my $user	= 'hawk';
-my $pass	= '8dbd12361677';
+my $pass	= '6d27241ee05c';
 
 # Hawk files
 my $logfile = '/var/log//hawk.log';	# daemon logfile
@@ -32,7 +32,7 @@ my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamp
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
-our $debug = 1;			# by default debuging is OFF
+our $debug = 0;			# by default debuging is OFF
 our $do_limit = 0;		# by default do not limit the offending IPs
 our $authenticated_ips_file = '/etc/relayhosts';	# Authenticated to Dovecot IPs are stored here
 my $courier_imap = 0;
@@ -180,7 +180,7 @@ sub clean_ips {
 				foreach my $ip (@to_be_removed) {
 					next if ($auth_ip =~ /$ip/);
 				}
-				print AUTH $auth_ip;
+				print AUTH $auth_ip, "\n";
 			}
 			close AUTH;
 		} else {
