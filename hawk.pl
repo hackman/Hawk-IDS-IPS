@@ -23,16 +23,16 @@ our %authenticated_ips = ();	# authenticated_ips storage
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
 my $user	= 'hawk';
-my $pass	= '6d27241ee05c';
+my $pass	= '31531db4288e';
 
 # Hawk files
-my $logfile = '/var/log/hawk.log';	# daemon logfile
+my $logfile = '/var/log//hawk.log';	# daemon logfile
 my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
 my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamps for I/O Errors
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
-our $debug = 0;			# by default debuging is OFF
+our $debug = 1;			# by default debuging is OFF
 our $do_limit = 0;		# by default do not limit the offending IPs
 our $authenticated_ips_file = '/etc/relayhosts';	# Authenticated to Dovecot IPs are stored here
 my $courier_imap = 0;
@@ -176,10 +176,15 @@ sub clean_ips {
 		# write the new file without the ips from @to_be_removed
 		if (open AUTH, '>', $authenticated_ips_file) {
 			foreach my $auth_ip(@auth_list) {
-				logger("Auth element $auth_ip") if ($debug);
+				my $skip_ip = 0;
+				chomp($auth_ip);
 				foreach my $ip (@to_be_removed) {
-					next if ($auth_ip =~ /$ip/);
+					if ($auth_ip =~ /$ip/) {
+						logger("$auth_ip will be removed");
+						$skip_ip = 1;
+					}
 				}
+				next if ($skip_ip);
 				print AUTH $auth_ip, "\n";
 			}
 			close AUTH;
@@ -350,7 +355,9 @@ while (<LOGS>) {
 				save_ip($pop3[8]);
 			} elsif ($_ =~ /auth failed/) {
 				my $failed_entry = 14;
-				if ($_ =~ /Aborted login/) {
+				if ($_ =~ /secured Aborted login/ ) {
+					$failed_entry = 15;
+				} elsif ($_ =~ /Aborted login/ && $_ !~ /secured/) {
 					$failed_entry = 14;
 				} elsif ($_ =~ /Disconnected/) {
 					$failed_entry = 13;
@@ -385,7 +392,9 @@ while (<LOGS>) {
 				save_ip($imap[8]);
 			} elsif ($_ =~ /auth failed/) {
 				my $failed_entry = 14;
-				if ($_ =~ /Aborted login/) {
+				if ($_ =~ /secured Aborted login/ ) {
+					$failed_entry = 15;
+				} elsif ($_ =~ /Aborted login/ && $_ !~ /secured/) {
 					$failed_entry = 14;
 				} elsif ($_ =~ /Disconnected/) {
 					$failed_entry = 13;
