@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.80';	# version string
+my $version = '0.81';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -26,13 +26,13 @@ my $user	= 'hawk';
 my $pass	= '31531db4288e';
 
 # Hawk files
-my $logfile = '/var/log//hawk.log';	# daemon logfile
+my $logfile = '/var/log/hawk.log';	# daemon logfile
 my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
 my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamps for I/O Errors
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
-our $debug = 1;			# by default debuging is OFF
+our $debug = 0;			# by default debuging is OFF
 our $do_limit = 0;		# by default do not limit the offending IPs
 our $authenticated_ips_file = '/etc/relayhosts';	# Authenticated to Dovecot IPs are stored here
 my $courier_imap = 0;
