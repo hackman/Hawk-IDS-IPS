@@ -9,7 +9,7 @@ use File::Basename;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.95';		# version string
+my $version = '0.98';		# version string
 
 my $conf = '/home/sentry/hackman/hawk-web.conf';
 # make DB vars
@@ -96,10 +96,8 @@ sub get_service_num {
 		return '2';
 	} elsif ($_[0] eq 'ssh') {
 		return '3';
-	} elsif ($_[0] eq 'cp_panel') {
+	} elsif ($_[0] =~  /cpanel/i) {
 		return 4;
-	} elsif ($_[0] eq 'cp_webmail') {
-		return 5;
 	}
 }
 sub get_num_service {
@@ -112,9 +110,7 @@ sub get_num_service {
 	} elsif ($_[0] == 3) {
 		return 'ssh';
 	} elsif ($_[0] == 4) {
-		return 'cp_panel';
-	} elsif ($_[0] == 5) {
-		return 'cp_webmail';
+		return 'cpanel';
 	}
 }
 
@@ -199,7 +195,11 @@ if ($action eq 'listfailed') {
 		my @values;
 		if ( param('w') eq 'ip' && param('addr') =~ /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/ ) {
 			# search for IP
- 			$query = "SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date\",ip,\"user\",service FROM failed_log WHERE ip = ? ORDER BY \"date\" DESC LIMIT ?";
+			if (defined(param('date'))) {
+				$query = "SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date2\",ip,\"user\",service FROM failed_log WHERE ip = ? and \"date\"<='" . param('date') . "' ORDER BY date DESC LIMIT ?";
+			} else {
+ 				$query = "SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date2\",ip,\"user\",service FROM failed_log WHERE ip = ? ORDER BY date DESC LIMIT ?";
+			}
 			push @values, param('addr');
 		} elsif ( param('w') eq 'tp' && param('from') =~ /^[0-9:\.\-\s]+$/ && param('to') =~ /^[0-9:\.\-\s]+$/ ) {
 # 			$query = sprintf("SELECT \"date\",ip,\"user\",service FROM failed_log WHERE \"date\" BETWEEN TO_DATE('%s') AND TO_DATE('%s') ORDER BY \"date\" DESC", param('from'), param('to'));
@@ -288,7 +288,7 @@ if ($action eq 'listfailed') {
 	my $get_info = $conn->prepare($query) or web_error("Unable to prepare query: $DBI::errstr");
 	$get_info->execute(@values) or web_error("Unable to execute query: $DBI::errstr");
 	my $lines='';
-	my $line0 = "<tr><td class='td0'>__DATE0__</td><td class='td0'>__DATE1__</td><td class='td0'><a href='?action=search&w=ip&addr=__IP__'>__IP__</a></td><td class='td0'>__REASON__</td></tr>\n";
+	my $line0 = "<tr><td class='td0'>__DATE0__</td><td class='td0'>__DATE1__</td><td class='td0'><a href='?action=search&w=ip&addr=__IP__&date=__DATE0__'>__IP__</a></td><td class='td0'>__REASON__</td></tr>\n";
 	if ($type) {
 		print "<h3>Listing the blacklist for the last 26 hours(limited to the first 200 entries):</h3>";
 	} else {
@@ -306,7 +306,7 @@ if ($action eq 'listfailed') {
 		my $line = $line0;		
 		my $val = $str[1];
 		$val = 'none' if ($str[1] eq '');
-		$line =~ s/__DATE0__/$str[0]/;
+		$line =~ s/__DATE0__/$str[0]/g;
 		$line =~ s/__DATE1__/$val/;
 		$line =~ s/__IP__/$str[2]/g;
 		$line =~ s/__REASON__/$str[3]/;
@@ -376,7 +376,7 @@ function sort(val) {
 } else {
 	my $lines = '';
 	my $line0 = "<tr><td>__DATE__</td><td>__COUNT__</td></tr>\n";
-	my $line1 = "<tr><td>__SSH__</td><td>__FTP__</td><td>__POP3__</td><td>__IMAP__</td><td>__CPANEL__</td><td>__WEBMAIL__</td></tr>\n";
+	my $line1 = "<tr><td>__SSH__</td><td>__FTP__</td><td>__POP3__</td><td>__IMAP__</td><td>__CPANEL__</td></tr>\n";
 	my $line2 = "<tr><td><a href=\"?action=search\&w=ip\&addr=__IP__\">__IP__</a></td></tr>\n";
 
 	# last 1 hour
@@ -429,7 +429,20 @@ function sort(val) {
 		ORDER BY TO_CHAR(date_add, 'YYYY-MM-DD') DESC LIMIT 1");
 
 	if (defined(param('cgi'))) {
-		print "$broots0|$failed0|0:$blacklisted_1h_active|0:$blacklisted_days_active0[1]|1:$blacklisted_1h_removed|1:$blacklisted_days_removed0[1]";
+		my $line='';
+		$line .= $broots0 if (defined($broots0));
+		$line .= '|';
+		$line .= $failed0 if (defined($failed0));
+        $line .= '|0:';
+		$line .= $blacklisted_1h_active if (defined($failed0));
+		$line .= '|0:';
+		$line .= $blacklisted_days_active0[1] if (defined($blacklisted_days_active0[1]));
+		$line .= '|1:';
+        $line .= $blacklisted_1h_removed if (defined($blacklisted_1h_removed));
+		$line .= '|1:';
+        $line .= $blacklisted_days_removed0[1] if (defined($blacklisted_days_removed0[1]));
+#		print "$broots0|$failed0|0:$blacklisted_1h_active|0:$blacklisted_days_active0[1]|1:$blacklisted_1h_removed|1:$blacklisted_days_removed0[1]";
+		print $line;
 # 		$blacklisted_days_active->execute('1');
 # 		while (my ($date, $count) = $blacklisted_days_active->fetchrow_array) {
 # 			print "|0:$date:$count";
@@ -459,9 +472,7 @@ function sort(val) {
 		my $imap = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
 			WHERE service = \'imap\' AND date > (now() - interval \'1 hour\')');
 		my $cpanel = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'cp_panel\' AND date > (now() - interval \'1 hour\')');
-		my $webmail = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'cp_webmail\' AND date > (now() - interval \'1 hour\')');
+			WHERE service = \'cpanel\' AND date > (now() - interval \'1 hour\')');
 		$html .= get_template('summary');
 
 		my $i=2;
@@ -542,7 +553,6 @@ function sort(val) {
 		$line1 =~ s/__POP3__/$pop3/;
 		$line1 =~ s/__IMAP__/$imap/;
 		$line1 =~ s/__CPANEL__/$cpanel/;
-		$line1 =~ s/__WEBMAIL__/$webmail/;
 		$html =~ s/__TABLE2__/$line1/;
 		
 		$lines = '';
