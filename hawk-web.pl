@@ -9,7 +9,7 @@ use File::Basename;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.98';		# version string
+my $version = '0.99';		# version string
 
 my $conf = '/home/sentry/hackman/hawk-web.conf';
 # make DB vars
@@ -202,14 +202,13 @@ if ($action eq 'listfailed') {
 			}
 			push @values, param('addr');
 		} elsif ( param('w') eq 'tp' && param('from') =~ /^[0-9:\.\-\s]+$/ && param('to') =~ /^[0-9:\.\-\s]+$/ ) {
-# 			$query = sprintf("SELECT \"date\",ip,\"user\",service FROM failed_log WHERE \"date\" BETWEEN TO_DATE('%s') AND TO_DATE('%s') ORDER BY \"date\" DESC", param('from'), param('to'));
 			# search for time period
- 			$query = "SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date\",ip,\"user\",service FROM failed_log WHERE \"date\" BETWEEN TO_DATE( ? ) AND TO_DATE( ? ) ORDER BY \"date\" DESC LIMIT ?";
+ 			$query = "SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date2\",ip,\"user\",service FROM failed_log WHERE \"date\" BETWEEN TO_DATE( ? ) AND TO_DATE( ? ) ORDER BY \"date\" DESC LIMIT ?";
 			push @values, param('from');
 			push @values, param('to');
 		} elsif ( param('w') eq 'us' && param('user') =~ /^[a-zA-Z0-9\.\@\-]+$/ ) {
 			# search for user
- 			$query = "SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date\",ip,\"user\",service FROM failed_log WHERE \"user\" ~ ? ORDER BY \"date\" DESC LIMIT ?";
+ 			$query = "SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date2\",ip,\"user\",service FROM failed_log WHERE \"user\" ~ ? ORDER BY \"date\" DESC LIMIT ?";
 			push @values, param('user');	
 		} elsif ( param('w') eq 'sv' && param('ss') =~ /^[0-9]+$/ ) {
 			# search for service
@@ -260,24 +259,24 @@ if ($action eq 'listfailed') {
 		defined(param('addr')) && 
 		param('w') eq 'ip' && 
 		param('addr') =~ /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/ ) {
- 		$query = "SELECT TO_CHAR(date_add, 'DD.Mon.YYYY HH24:MI') AS date_add,date_rem,ip,reason FROM blacklist WHERE ip = ? ORDER BY date_add DESC LIMIT ?";
+ 		$query = "SELECT TO_CHAR(date_add, 'DD.Mon.YYYY HH24:MI') AS date_add2,date_rem,ip,reason FROM blacklist WHERE ip = ? ORDER BY date_add DESC LIMIT ?";
 		push @values,  param('addr');
 		$type = 0;
 	} else {
 		if (defined(param('only')) && param('only') eq 'rem') {
 			$query = "SELECT 
-			TO_CHAR(date_add, 'DD.Mon.YYYY HH24:MI') AS date_add, TO_CHAR(date_rem, 'DD.Mon.YYYY HH24:MI') AS date_rem,ip,reason 
+			TO_CHAR(date_add, 'DD.Mon.YYYY HH24:MI') AS date_add2, TO_CHAR(date_rem, 'DD.Mon.YYYY HH24:MI') AS date_rem,ip,reason 
 			FROM blacklist 
 			WHERE date_rem IS NOT NULL AND date_rem > (now() - interval '24 hour')
 			ORDER BY date_add DESC LIMIT ?";
 		} elsif (defined(param('only')) && param('only') eq 'act') {
 			$query = "SELECT 
-			TO_CHAR(date_add, 'DD.Mon.YYYY HH24:MI') AS date_add, TO_CHAR(date_rem, 'DD.Mon.YYYY HH24:MI') AS date_rem,ip,reason 
+			TO_CHAR(date_add, 'DD.Mon.YYYY HH24:MI') AS date_add2, TO_CHAR(date_rem, 'DD.Mon.YYYY HH24:MI') AS date_rem,ip,reason 
 			FROM blacklist 
 			WHERE date_rem IS NULL AND date_add > (now() - interval '24 hour')
 			ORDER BY date_add DESC LIMIT ?";
 		} else {
-			$query = "SELECT TO_CHAR(date_add, 'DD.Mon.YYYY HH24:MI') AS date_add, TO_CHAR(date_rem, 'DD.Mon.YYYY HH24:MI') AS date_rem,ip,reason FROM blacklist ORDER BY date_add DESC LIMIT ?";
+			$query = "SELECT TO_CHAR(date_add, 'DD.Mon.YYYY HH24:MI') AS date_add2, TO_CHAR(date_rem, 'DD.Mon.YYYY HH24:MI') AS date_rem,ip,reason FROM blacklist ORDER BY date_add DESC LIMIT ?";
 		}
 	}
 	if ( defined(param('lim')) && param('lim') =~ /^[0-9+]$/ ) {
