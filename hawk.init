@@ -88,8 +88,8 @@ change_hawk_pass() {
 	fi
 	chmod 600 ~/.pgpass
     sed -i "/^my \$pass/s/=.*/= '$newpass';/" /usr/local/sbin/hawk.pl
-    sed -i "/^my \$dbpass/s/=.*/= '$newpass';/" /etc/sgmail/eq.pl
-	chmod 4755 /etc/sgmail/eq.pl
+	#sed -i "/^my \$dbpass/s/=.*/= '$newpass';/" /etc/sgmail/eq.pl
+	#chmod 4755 /etc/sgmail/eq.pl
 	sed -i "/dbpass/s/=.*/=$newpass/" /home/sentry/hackman/hawk-web.conf
     stop_program
     sleep 1
