@@ -88,12 +88,14 @@ change_hawk_pass() {
 	fi
 	chmod 600 ~/.pgpass
     sed -i "/^my \$pass/s/=.*/= '$newpass';/" /usr/local/sbin/hawk.pl
-	#sed -i "/^my \$dbpass/s/=.*/= '$newpass';/" /etc/sgmail/eq.pl
-	#chmod 4755 /etc/sgmail/eq.pl
 	sed -i "/dbpass/s/=.*/=$newpass/" /home/sentry/hackman/hawk-web.conf
+    sed -i "/^dbpass/s/=.*/= $newpass/" /etc/sgmail/quotad.conf
     stop_program
     sleep 1
     start_program
+	if [ -f /etc/init.d/mailquotad ] && [ -x /etc/init.d/mailquotad ]; then
+		/etc/init.d/mailquotad restart
+	fi	
 }
 
 
@@ -144,7 +146,7 @@ hawk_install() {
 	change_hawk_pass
 	rm -f /var/lib/pgsql/hawk_db.sql
 	if ( ! grep 'HAWK-' /root/admin/sgfirewall > /dev/null ); then
-		echo -e "############ HAWK-BLCOKED ####################\n############ HAWK+BLOCKED ####################" >> /root/admin/sgfirewall
+		echo -e "############ HAWK-BLOCKED ####################\n############ HAWK+BLOCKED ####################" >> /root/admin/sgfirewall
 		echo "Added HAWK lines to /root/admin/sgfirewall"
 	fi
 
