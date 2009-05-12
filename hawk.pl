@@ -468,21 +468,6 @@ while (<LOGS>) {
 			}
 			logger(" IP $imap[8]($imap[7]) failed to identify to courier-imap.") if ($debug);
 		}
-	} elsif ( $_ =~ /cpanelpop/ && $_ =~ /totalxfer=102\s*$/ ) {
-		# cPanel IMAP & cPanel POP3
-		#May 16 02:37:31 serv01 cpanelpop[29746]: Session Closed host=67.15.172.8 ip=67.15.172.8 user=root realuser= totalxfer=102
-		my @pop3 = split /\s+/, $_;
-		if ( defined($pop3[10]) && $pop3[10] =~  /realuser=/ ) {
-			$pop3[7] =~ s/host=//;
-			next if ( $pop3[7] =~ /$myip/ ); # this is the local server
-			$log_me->execute($pop3[7], '', 'pop3') or logger("Failed to insert: $pop3[7], $DBI::errstr");
-			if ( exists $pop3_faults {$pop3[7]} ) {
-				$pop3_faults{$pop3[7]}++;
-			} else {
-				$pop3_faults{$pop3[7]} = 1;
-			}
-			logger("IP $pop3[7] faild to identify to cppop") if ($debug);
-		}
 	} elsif ( $_ =~ /imapd/ && $_ =~ /failed/ ) {
 		# cPanel IMAP
 		#May 17 17:06:44 serv01 imapd[32199]: Login failed user=dsada domain=(null) auth=dsada host=[85.14.6.2]
@@ -497,7 +482,25 @@ while (<LOGS>) {
 			$imap_faults{$imap[10]} = 1;
 		}
 		logger("IP $imap[10]($imap[7]) failed to identify to cpimap.") if ($debug);
-	} elsif ( $_ =~ /I\/O error/i ) { 
+	} elsif ($dovecot == 0 && $courier_imap == 0) {
+		if ( $_ =~ /cpanelpop/ && $_ =~ /totalxfer=102\s*$/ ) {
+			# cPanel IMAP & cPanel POP3
+			#May 16 02:37:31 serv01 cpanelpop[29746]: Session Closed host=67.15.172.8 ip=67.15.172.8 user=root realuser= totalxfer=102
+			my @pop3 = split /\s+/, $_;
+			if ( defined($pop3[10]) && $pop3[10] =~  /realuser=/ ) {
+				$pop3[7] =~ s/host=//;
+				next if ( $pop3[7] =~ /$myip/ ); # this is the local server
+				$log_me->execute($pop3[7], '', 'pop3') or logger("Failed to insert: $pop3[7], $DBI::errstr");
+				if ( exists $pop3_faults {$pop3[7]} ) {
+					$pop3_faults{$pop3[7]}++;
+				} else {
+					$pop3_faults{$pop3[7]} = 1;
+				}
+				logger("IP $pop3[7] faild to identify to cppop") if ($debug);
+			}
+		}
+	}
+	if ( $_ =~ /I\/O error/i ) { 
 	# Feb 14 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
 	# Feb 14 19:18:58 serv01 kernel: end_request: I/O error, dev sdb, sector 1405727387 
 		my @line = split /\s+/, $_;
