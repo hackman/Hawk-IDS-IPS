@@ -2,11 +2,11 @@
 use strict;
 use warnings;
 use DBD::mysql;
-use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
+use POSIX qw(setsid), qw(strftime), qw(WNOHANG);	# use only setsid & strftime from POSIX
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.81';	# version string
+my $version = '0.82';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -18,12 +18,11 @@ our %cpanel_faults = ();	# cpanel faults storage
 our %notifications = ();	# notifications
 our %possible_attackers = ();	# possible hack attempts
 our %authenticated_ips = ();	# authenticated_ips storage
-# our %possible_shitters = ();	# possible hack attempts
 
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
 my $user	= 'hawk';
-my $pass	= '31531db4288e';
+my $pass	= '741e8bc65a0b';
 
 # Hawk files
 my $logfile = '/var/log/hawk.log';	# daemon logfile
@@ -75,27 +74,32 @@ $0 = "[Hawk]";
 # open the logfile
 open HAWK, '>>', $logfile or die "DIE: Unable to open logfile $logfile: $!\n";
 logger("Hawk version $version started!");
-#print HAWK get_time(), " Hawk version $version started!\n";
-
 
 # execute this before DIE-ing :)
 $SIG{__DIE__}  = sub { logger(@_); };
+$SIG{"CHLD"} = \&sigChld;
 
 # check if the daemon is running
 if ( -e $pidfile ) {
-        # get the old pid
-        open PIDFILE, '<', $pidfile or die "DIE: Can't open pid file($pidfile): $!\n";
+	# get the old pid
+	open PIDFILE, '<', $pidfile or die "DIE: Can't open pid file($pidfile): $!\n";
 	my $old_pid = <PIDFILE>;
-        close PIDFILE;
-        # check if $old_pid is still running
+	close PIDFILE;
+	# check if $old_pid is still running
 	if ( $old_pid =~ /[0-9]+/ ) {
 		if ( -d "/proc/$old_pid" ) {
 			logger("Hawk is already running!");
 			die "DIE: Hawk is already running!\n";
-	        }
+		}
 	} else {
 		logger("Incorrect pid format!");
 		die "DIE: Incorrect pid format!\n";
+	}
+}
+
+sub sigChld {
+	while (waitpid(-1,WNOHANG)>0 ) {
+		logger("The child has been cleaned!") if ($debug);
 	}
 }
 
@@ -115,6 +119,7 @@ sub get_ip {
 	close IP;
 	return $ip[2]
 }
+
 sub check_ip {
 	if ( $_[0] =~ /[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}/ ) {
 		return 1;
@@ -140,7 +145,7 @@ sub cleanh {
 	delete @imap_faults{keys %imap_faults};
 	delete @cpanel_faults{keys %cpanel_faults};
 	delete @notifications{keys %notifications};
-	logger("hashes cleaned!");
+	logger("hashes cleaned!") if ($debug);
 }
 
 sub save_ip {
@@ -195,6 +200,7 @@ sub clean_ips {
  		logger("I was unable to open $authenticated_ips_file");
 	}
 }
+
 # check for broots
 sub check_broot {
 	while ( my ($k,$v) = each (%ssh_faults) ) {
@@ -264,13 +270,6 @@ our $broot_me = $conn->prepare('INSERT INTO broots ( ip, service ) VALUES ( ?, ?
 my $get_failed = $conn->prepare('SELECT COUNT(id) AS id FROM failed_log') 
 	or die "Unable to prepare log query: $!\n";
 
-# $conn->{mysql_auto_reconnect} = 1;
-# if ($conn->{mysql_auto_reconnect}) {
-# 	print "Autoreconnect OK\n" if ($debug == 1);
-# } else {
-# 	die "Autoreconnect turned OFF!\n";
-# }
-
 # notifications to admins
 
 sub notify_hack {
@@ -288,6 +287,7 @@ sub notify_hack {
 		$mconn->disconnect;
 	}
 }
+
 sub notify {
 	# 0 - SERVICE 
 	# 1 - IP
@@ -308,13 +308,13 @@ sub notify {
 	}
 	# Limit the offender
 	if ($do_limit) {
-# variant 0
-# iptables -I in_hawk -s $_[0] -p tcp --dport $_[2]
-# variant 1
-#iptables -A in_hawk -p tcp --dport $_[2] --syn -m recent --name  --update --seconds 60 --hitcount 6 -m limit --limit 6/minute -j SSH_bruteforce
-# variant 2
-#iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --set
-#iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --update --seconds 120 --hitcount 1 -j DROP 
+		# variant 0
+		# iptables -I in_hawk -s $_[0] -p tcp --dport $_[2]
+		# variant 1
+		#iptables -A in_hawk -p tcp --dport $_[2] --syn -m recent --name  --update --seconds 60 --hitcount 6 -m limit --limit 6/minute -j SSH_bruteforce
+		# variant 2
+		#iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --set
+		#iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --update --seconds 120 --hitcount 1 -j DROP 
 		if (system("/usr/local/sbin/iptables -I in_hawk -i eth0 -p tcp --dport $services{$_[2]} -s $_[0] -m state --state NEW -m recent --set && iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --update --seconds 120 --hitcount 1 -j DROP ")) {
 			logger("Unable to block: $_[0], $_[1], $_[2]");
 		} else {
@@ -343,14 +343,13 @@ sub send_fault() {
 	};
 }
 
-our @senders = ();
 while (<LOGS>) {
 	if ($dovecot) {
 		# Dovecot IMAP & POP3
 		if ($_ =~ /pop3-login:/) {
 			my @pop3 = split /\s+/, $_;
 			if (defined $pop3[10] && $pop3[10] eq 'Login') {
-			# Jan 27 23:06:03 serv01 dovecot: pop3-login: user=<pelletsqa@leepharma.com>, method=PLAIN, rip=121.243.129.200, lip=67.15.172.14 Login
+				# Jan 27 23:06:03 serv01 dovecot: pop3-login: user=<pelletsqa@leepharma.com>, method=PLAIN, rip=121.243.129.200, lip=67.15.172.14 Login
 				$pop3[8] =~ s/rip=(.*),/$1/;
 				save_ip($pop3[8]);
 			} elsif ($_ =~ /auth failed/) {
@@ -362,7 +361,7 @@ while (<LOGS>) {
 				} elsif ($_ =~ /Disconnected/) {
 					$failed_entry = 13;
 				}
-			#Jan 27 23:09:37 serv01 dovecot: pop3-login: user=<aaa>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 8 attempts)
+				#Jan 27 23:09:37 serv01 dovecot: pop3-login: user=<aaa>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 8 attempts)
 				$pop3[8] =~ s/rip=(.*),/$1/;
 				$pop3[6] =~ s/user=<(.*)>,/$1/;
 				next if ( $pop3[8] =~ /$myip/ );	# this is the local server
@@ -383,7 +382,7 @@ while (<LOGS>) {
 				logger("IP $pop3[8]($pop3[6]) faild to identify to dovecot-pop3 $pop3[$failed_entry] times") if ($debug);
 			}
 		} elsif ($_ =~ /imap-login/ ) {
-		#Jan 27 23:24:28 serv01 dovecot: imap-login: user=<user>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 1 attempts)
+			#Jan 27 23:24:28 serv01 dovecot: imap-login: user=<user>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 1 attempts)
 			my @imap = split /\s+/, $_;
 			if (defined $imap[11] && $imap[11] eq 'Login') {
 			# Jan 27 23:31:26 serv01 dovecot: imap-login: user=<m.harrington@okemomountainschool.org>, method=PLAIN, rip=67.223.78.73, lip=67.15.172.14, TLS Login
@@ -423,8 +422,7 @@ while (<LOGS>) {
 	} elsif ($courier_imap) {
 		# Courier IMAP & POP3
 		if ( $_ =~ /pop3d:/ && $_ =~ /FAILED/ ) {
-		# Courier POP3
-		#May 11 03:58:40 serv01 pop3d: LOGIN FAILED, user=kate, ip=[::ffff:72.43.28.210]
+			#May 11 03:58:40 serv01 pop3d: LOGIN FAILED, user=kate, ip=[::ffff:72.43.28.210]
 			my @pop3 = split /\s+/, $_;
 			$pop3[8] =~ s/ip=\[(.*)\]/$1/;
 			$pop3[7] =~ s/user=(.*),/$1/;
@@ -446,8 +444,7 @@ while (<LOGS>) {
 			}
 			logger("IP $pop3[8]($pop3[7]) faild to identify to courier-pop3") if ($debug);
 		} elsif ( $_ =~ /imapd/ && $_ =~ /FAILED/ ) {
-		# Courier IMAP
-		#May 15 05:26:16 serv01 imapd: LOGIN FAILED, user=admin, ip=[::ffff:67.15.243.20]
+			#May 15 05:26:16 serv01 imapd: LOGIN FAILED, user=admin, ip=[::ffff:67.15.243.20]
 			my @imap = split /\s+/, $_;
 			$imap[8] =~ s/host=\[::ffff:(.*)\]/$1/;
 			$imap[7] =~ s/user=//;
@@ -470,7 +467,6 @@ while (<LOGS>) {
 		}
 	} elsif ($dovecot == 0 && $courier_imap == 0) {
 		if ( $_ =~ /cpanelpop/ && $_ =~ /totalxfer=102\s*$/ ) {
-			# cPanel IMAP & cPanel POP3
 			#May 16 02:37:31 serv01 cpanelpop[29746]: Session Closed host=67.15.172.8 ip=67.15.172.8 user=root realuser= totalxfer=102
 			my @pop3 = split /\s+/, $_;
 			if ( defined($pop3[10]) && $pop3[10] =~  /realuser=/ ) {
@@ -485,7 +481,6 @@ while (<LOGS>) {
 				logger("IP $pop3[7] faild to identify to cppop") if ($debug);
 			}
 	 	} elsif ( $_ =~ /imapd/ && $_ =~ /failed/ ) {
-		# cPanel IMAP
 		#May 17 17:06:44 serv01 imapd[32199]: Login failed user=dsada domain=(null) auth=dsada host=[85.14.6.2]
 		my @imap = split /\s+/, $_;
 		$imap[10] =~ s/host=\[(.*)\]/$1/;
@@ -501,14 +496,10 @@ while (<LOGS>) {
 	}
 	}
 	if ( $_ =~ /I\/O error/i ) { 
-	# Feb 14 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
-	# Feb 14 19:18:58 serv01 kernel: end_request: I/O error, dev sdb, sector 1405727387 
+		# Feb 14 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
 		my @line = split /\s+/, $_;
-		# fork the checker
 		my $pid = fork();
-		# add the child's pid to che fork array
-		push @senders, $pid;
-		defined $pid or print "Resources not avilable. Unable to fork checker.\n";
+		defined $pid or logger("Resources not avilable. Unable to fork checker.");
 		setsid;
 		if ($pid == 0) {
 			# this is the child
@@ -517,7 +508,7 @@ while (<LOGS>) {
 			exit 0;
 		}		
 	} elsif ($_ =~ /\/\.htaccess uploaded/) {
-	# Aug 14 16:20:09 serv01 pure-ftpd: (kansasc1@87.248.180.90) [NOTICE] /home/kansasc1//.htaccess uploaded  (471 bytes, 2.83KB/sec)
+		# Aug 14 16:20:09 serv01 pure-ftpd: (kansasc1@87.248.180.90) [NOTICE] /home/kansasc1//.htaccess uploaded  (471 bytes, 2.83KB/sec)
 		my @line = split /\s+/, $_;
 		my $ip = $line[5];
 		my $user = $ip;
@@ -525,8 +516,8 @@ while (<LOGS>) {
 		$ip   =~ s/.*\@(.*)\)/$1/;
  		notify_hack("Possible hack attempt at $hostname to user $user from ip $ip");
  	} elsif ( $_ =~ /ssh/ && $_ =~ /Failed/ ) {
-	#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
-	#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
+		#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
+		#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
 		my @sshd = split /\s+/, $_;
 		my $ip = '';
 		my $user = '';
@@ -548,8 +539,8 @@ while (<LOGS>) {
 		}
 		logger(" IP $ip failed to identify to ssh.") if ($debug);
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
-	# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
-	# Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
+		# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
+		# Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
 		my @ftp = split /\s+/, $_;	
  		$ftp[5] =~ s/\(.*\@(.*)\)/$1/;	# get the IP
 		$ftp[11] =~ s/\[(.*)\]/$1/;		# get the username
@@ -569,8 +560,8 @@ while (<LOGS>) {
 		}
 		logger("IP $ftp[5]($ftp[11]) failed to identify to Pure-FTPD.") if ($debug);
 	} elsif ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) {
-	#209.62.36.16 - webmail.siteground216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
-	#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
+		#209.62.36.16 - webmail.siteground216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
+		#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
 		my @cpanel = split /\s+/;
 		my $service = 'webmail';
 		$service = 'cpanel' if ($cpanel[10] eq 'cpaneld:');
@@ -592,14 +583,6 @@ while (<LOGS>) {
 	my $passed_time = $curr_time - $start_time;	# get the pssed time
 	if ($passed_time > $broot_time) {		# if the passed time is grater then $broot_time
 		cleanh();							# clean the hashes
-		eval {
-			local $SIG{ALRM} = sub { die 'alarm'; };
-			alarm 2;
-			# clean the childs(RAPER)
-			# I have to write the new(better) RAPER, using SIGCHLD
-			waitpid($_, 0) foreach(@senders);
-			alarm 0;
-		};
 		$start_time = time();				# set the start_time to now
 	}
 
@@ -611,6 +594,7 @@ while (<LOGS>) {
 	}
 
 }
+
 close LOGS;
 close HAWK;
 close STDIN;
