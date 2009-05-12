@@ -468,20 +468,6 @@ while (<LOGS>) {
 			}
 			logger(" IP $imap[8]($imap[7]) failed to identify to courier-imap.") if ($debug);
 		}
-	} elsif ( $_ =~ /imapd/ && $_ =~ /failed/ ) {
-		# cPanel IMAP
-		#May 17 17:06:44 serv01 imapd[32199]: Login failed user=dsada domain=(null) auth=dsada host=[85.14.6.2]
-		my @imap = split /\s+/, $_;
-		$imap[10] =~ s/host=\[(.*)\]/$1/;
-		$imap[7] =~ s/user=//;
-		next if ( $imap[10] =~ /$myip/ );	# this is the local server
-		$log_me->execute($imap[10], $imap[7], 'imap');
-		if ( exists $imap_faults {$imap[10]} ) {
-			$imap_faults{$imap[10]}++;
-		} else {
-			$imap_faults{$imap[10]} = 1;
-		}
-		logger("IP $imap[10]($imap[7]) failed to identify to cpimap.") if ($debug);
 	} elsif ($dovecot == 0 && $courier_imap == 0) {
 		if ( $_ =~ /cpanelpop/ && $_ =~ /totalxfer=102\s*$/ ) {
 			# cPanel IMAP & cPanel POP3
@@ -498,7 +484,21 @@ while (<LOGS>) {
 				}
 				logger("IP $pop3[7] faild to identify to cppop") if ($debug);
 			}
+	 	} elsif ( $_ =~ /imapd/ && $_ =~ /failed/ ) {
+		# cPanel IMAP
+		#May 17 17:06:44 serv01 imapd[32199]: Login failed user=dsada domain=(null) auth=dsada host=[85.14.6.2]
+		my @imap = split /\s+/, $_;
+		$imap[10] =~ s/host=\[(.*)\]/$1/;
+		$imap[7] =~ s/user=//;
+		next if ( $imap[10] =~ /$myip/ );	# this is the local server
+		$log_me->execute($imap[10], $imap[7], 'imap');
+		if ( exists $imap_faults {$imap[10]} ) {
+			$imap_faults{$imap[10]}++;
+		} else {
+			$imap_faults{$imap[10]} = 1;
 		}
+		logger("IP $imap[10]($imap[7]) failed to identify to cpimap.") if ($debug);
+	}
 	}
 	if ( $_ =~ /I\/O error/i ) { 
 	# Feb 14 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
@@ -512,8 +512,8 @@ while (<LOGS>) {
 		setsid;
 		if ($pid == 0) {
 			# this is the child
-			$0="sending_hdd_fault_on-".$line[14];
-			&send_fault($line[14]);
+			$0="sending_hdd_fault_on-".$line[9];
+			&send_fault($line[9]);
 			exit 0;
 		}		
 	} elsif ($_ =~ /\/\.htaccess uploaded/) {
