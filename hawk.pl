@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime), qw(WNOHANG);	# use only setsid & strftime fr
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.82';	# version string
+my $version = '0.83';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -38,6 +38,8 @@ my $courier_imap = 0;
 my $dovecot = 0;
 my $hostname = '';
 my $start_time = time();
+my $io_notified = $start_time;
+my $io_first = 0;
 my $pop_time = $start_time;
 my $pop_max_time = 1800;
 my $myip = get_ip();
@@ -315,7 +317,7 @@ sub notify {
 		# variant 2
 		#iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --set
 		#iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --update --seconds 120 --hitcount 1 -j DROP 
-		if (system("/usr/local/sbin/iptables -I in_hawk -i eth0 -p tcp --dport $services{$_[2]} -s $_[0] -m state --state NEW -m recent --set && iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --update --seconds 120 --hitcount 1 -j DROP ")) {
+		if (system("/usr/local/sbin/iptables -I in_hawk -i eth0 -p tcp --dport $services{$_[2]} -s $_[0] -m state --state NEW -m recent --set && /usr/local/sbin/iptables -I in_hawk -i eth0 -p tcp --dport $_[2] -s $_[0] -m state --state NEW -m recent --update --seconds 120 --hitcount 1 -j DROP ")) {
 			logger("Unable to block: $_[0], $_[1], $_[2]");
 		} else {
 			logger("Blocked: ip - $_[0], port - $_[2]");
@@ -481,22 +483,28 @@ while (<LOGS>) {
 				logger("IP $pop3[7] faild to identify to cppop") if ($debug);
 			}
 	 	} elsif ( $_ =~ /imapd/ && $_ =~ /failed/ ) {
-		#May 17 17:06:44 serv01 imapd[32199]: Login failed user=dsada domain=(null) auth=dsada host=[85.14.6.2]
-		my @imap = split /\s+/, $_;
-		$imap[10] =~ s/host=\[(.*)\]/$1/;
-		$imap[7] =~ s/user=//;
-		next if ( $imap[10] =~ /$myip/ );	# this is the local server
-		$log_me->execute($imap[10], $imap[7], 'imap');
-		if ( exists $imap_faults {$imap[10]} ) {
-			$imap_faults{$imap[10]}++;
-		} else {
-			$imap_faults{$imap[10]} = 1;
+			#May 17 17:06:44 serv01 imapd[32199]: Login failed user=dsada domain=(null) auth=dsada host=[85.14.6.2]
+			my @imap = split /\s+/, $_;
+			$imap[10] =~ s/host=\[(.*)\]/$1/;
+			$imap[7] =~ s/user=//;
+			next if ( $imap[10] =~ /$myip/ );	# this is the local server
+			$log_me->execute($imap[10], $imap[7], 'imap');
+			if ( exists $imap_faults {$imap[10]} ) {
+				$imap_faults{$imap[10]}++;
+			} else {
+				$imap_faults{$imap[10]} = 1;
+			}
+			logger("IP $imap[10]($imap[7]) failed to identify to cpimap.") if ($debug);
 		}
-		logger("IP $imap[10]($imap[7]) failed to identify to cpimap.") if ($debug);
-	}
 	}
 	if ( $_ =~ /I\/O error/i ) { 
 		# Feb 14 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
+		if ($io_first) {
+			if ((time() - $io_notified) < 900) {
+				logger("IO error detected but have been already notified during the last 15 mins ... skipping the notice");
+				next;
+			}
+		}
 		my @line = split /\s+/, $_;
 		my $pid = fork();
 		defined $pid or logger("Resources not avilable. Unable to fork checker.");
@@ -506,7 +514,9 @@ while (<LOGS>) {
 			$0="sending_hdd_fault_on-".$line[9];
 			&send_fault($line[9]);
 			exit 0;
-		}		
+		}
+		$io_first = 1 if ($io_first != 1);
+		$io_notified = time();
 	} elsif ($_ =~ /\/\.htaccess uploaded/) {
 		# Aug 14 16:20:09 serv01 pure-ftpd: (kansasc1@87.248.180.90) [NOTICE] /home/kansasc1//.htaccess uploaded  (471 bytes, 2.83KB/sec)
 		my @line = split /\s+/, $_;
