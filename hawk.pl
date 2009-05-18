@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime), qw(WNOHANG);	# use only setsid & strftime fr
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.83';	# version string
+my $version = '0.84';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -187,7 +187,7 @@ sub clean_ips {
 				chomp($auth_ip);
 				foreach my $ip (@to_be_removed) {
 					if ($auth_ip =~ /$ip/) {
-						logger("$auth_ip will be removed");
+						logger("$auth_ip will be removed") if ($debug);
 						$skip_ip = 1;
 					}
 				}
