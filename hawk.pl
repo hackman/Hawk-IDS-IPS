@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime), qw(WNOHANG);	# use only setsid & strftime fr
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.84';	# version string
+my $version = '0.90';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -22,7 +22,7 @@ our %authenticated_ips = ();	# authenticated_ips storage
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
 my $user	= 'hawk';
-my $pass	= '741e8bc65a0b';
+my $pass	= '19b536501eea';
 
 # Hawk files
 my $logfile = '/var/log/hawk.log';	# daemon logfile
@@ -30,19 +30,22 @@ my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
 my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamps for I/O Errors
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
+our $firewall_update = 5400; # time(in seconds) before updating the firewall
+our %allowed_ips = ();
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 our $debug = 0;			# by default debuging is OFF
 our $do_limit = 0;		# by default do not limit the offending IPs
 our $authenticated_ips_file = '/etc/relayhosts';	# Authenticated to Dovecot IPs are stored here
 my $courier_imap = 0;
 my $dovecot = 0;
-my $hostname = '';
 my $start_time = time();
 my $io_notified = $start_time;
 my $io_first = 0;
 my $pop_time = $start_time;
+my $fw_time = $start_time;
 my $pop_max_time = 1800;
 my $myip = get_ip();
+my $hostname = '';
 
 # check for debug
 if ( defined($ARGV[0]) && $ARGV[0] =~ /debug/ ) {
@@ -52,7 +55,8 @@ if ( defined($ARGV[0]) && $ARGV[0] =~ /debug/ ) {
 open HOST, '<', '/proc/sys/kernel/hostname' or die "Unable to open hostname file: $!\n";
 $hostname = <HOST>;
 close HOST;
-$hostname =~ s/[\r|\n]//;
+#$hostname =~ s/[\r|\n]//;
+$hostname =~ s/serv01.//;
 
 open EXIM, '<', '/etc/exim.conf' or die "Unable to open exim.conf: $!\n";
 while (<EXIM>) {
@@ -187,7 +191,7 @@ sub clean_ips {
 				chomp($auth_ip);
 				foreach my $ip (@to_be_removed) {
 					if ($auth_ip =~ /$ip/) {
-						logger("$auth_ip will be removed") if ($debug);
+						logger("$auth_ip will be removed");
 						$skip_ip = 1;
 					}
 				}
@@ -245,10 +249,10 @@ setsid or die "DIE: Unable to setsid: $!\n";
 umask 0;
 
 # redirect standart file descriptors to /dev/null
-open STDIN, '</dev/null' or die "DIE: Cannot read stdin: $! \n";
-open STDOUT, '>>/dev/null' or die "DIE: Cannot write to stdout: $! \n";
+open STDIN, '<', '/dev/null' or die "DIE: Cannot read stdin: $! \n";
+open STDOUT, '>>', '/dev/null' or die "DIE: Cannot write to stdout: $! \n";
 if (!$debug) {
-	open STDERR, '>>/dev/null' or die "DIE: Cannot write to stderr: $! \n";
+	open STDERR, '>>', "$logfile" or die "DIE: Cannot write to stderr: $! \n";
 }
 
 # write the program pid to the $pidfile
@@ -344,6 +348,33 @@ sub send_fault() {
 		alarm 0;
 	};
 }
+
+sub firewall_update {
+    delete @allowed_ips{keys %allowed_ips};
+	eval {
+		local $SIG{ALRM} = sub { die 'alarm'; };
+		alarm 5;
+		use IO::Socket::INET;
+		if ( my $sock = new IO::Socket::INET ( PeerAddr => 'master.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3') ) {
+			# Send the faulty drive!
+			print $sock "GET /~sentry/cgi-bin/hawkup.cgi?server=$hostname\n\n";
+			while (<$sock>) {
+				chomp($_);
+				logger("Socket answer $_");
+				$allowed_ips{$_} = $_;
+			}
+			close $sock;
+			while (my $ip = each (%allowed_ips)) {
+				logger("Allowed IPs hash entry $ip");
+			}
+		} else {
+			logger("Unable to connect to report IO error: $!");
+		}
+        alarm 0;
+    };
+}
+
+firewall_update();
 
 while (<LOGS>) {
 	if ($dovecot) {
@@ -525,29 +556,96 @@ while (<LOGS>) {
 		$user =~ s/\((.*)\@.*/$1/;
 		$ip   =~ s/.*\@(.*)\)/$1/;
  		notify_hack("Possible hack attempt at $hostname to user $user from ip $ip");
- 	} elsif ( $_ =~ /ssh/ && $_ =~ /Failed/ ) {
-		#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
-		#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
-		my @sshd = split /\s+/, $_;
+ 	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
+		chomp($_);
 		my $ip = '';
 		my $user = '';
-		if ( $sshd[8] =~ /invalid/ ) {
-			$sshd[12] =~ s/::ffff://;
-			$ip = $sshd[12];
-			$user = $sshd[10];
-		} else {
+		my $message = '';
+		my $ssh_issue = 0;
+		my $action = 0;
+		if ( $_ =~ /Failed password for/ || $_ =~ /Failed none for/ || $_ =~ /authentication failure/ || $_ =~ /Invalid user/ || $_ =~ /Connection closed by/ ) {
+			my @sshd = split /\s+/, $_;
+			if ( $sshd[8] =~ /invalid/ ) {
+				#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
+				#May 19 22:54:19 serv01 sshd[21552]: Failed none for invalid user supprot from 194.204.32.101 port 20943 ssh2
+				$sshd[12] =~ s/::ffff://;
+				$ip = $sshd[12];
+				$user = $sshd[10];
+				$ssh_issue = 1;
+				logger("sshd: Incorrect V1 $user $ip");
+			} elsif ( $sshd[5] =~ /Connection/ ) {
+				#May 25 02:11:34 serv01 sshd[10146]: Connection closed by 87.118.135.130
+				$sshd[8] =~ s/::ffff://;
+				$ip = $sshd[8];
+				$user = 'none';
+				$ssh_issue = 1;
+				logger("sshd: Incorrect KEY $user $ip");
+			} elsif ( $sshd[5] =~ /Invalid/) {
+				#May 19 22:54:19 serv01 sshd[21552]: Invalid user supprot from 194.204.32.101
+				$sshd[9] =~ s/::ffff://;
+				$ip = $sshd[9];
+				$user = $sshd[7];
+				$ssh_issue = 1;
+				logger("sshd: Incorrect V2 $user $ip");
+			} elsif ( $sshd[5] =~ /pam_unix\(sshd:auth\)/ ) {
+				#May 15 09:39:10 serv01 sshd[9474]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=194.204.32.101  user=root
+				$sshd[13] =~ s/::ffff://;
+				$sshd[13] =~ s/rhost=//;
+				$ip = $sshd[13];
+				$user = $sshd[14];
+				$ssh_issue = 1;
+				logger("sshd: Incorrect PAM $user $ip");
+			} else {
+				#May 15 09:39:12 serv01 sshd[9474]: Failed password for root from 194.204.32.101 port 17326 ssh2
+				#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
+				$sshd[10] =~ s/::ffff://;
+				$ip = $sshd[10];
+				$user = $sshd[8];
+				$ssh_issue = 1;
+				logger("sshd: Incorrect V3 $user $ip");
+			}
+			$action = 1;
+		} elsif ( $_ =~ /Accepted publickey/ || $_ =~ /Accepted password/ ) {
+			#May 25 00:48:58 serv01 sshd[16015]: Accepted publickey for root from 75.125.60.5 port 32863 ssh2
+			#May 20 00:51:54 serv01 sshd[20568]: Accepted password for support from ::ffff:67.15.245.5 port 50336 ssh2
+			#May 20 01:14:46 serv01 sshd[17692]: Accepted password for support from ::ffff:67.15.245.5 port 59698 ssh2
+			my @sshd = split /\s+/, $_;
 			$sshd[10] =~ s/::ffff://;
 			$ip = $sshd[10];
 			$user = $sshd[8];
+			$message = $_;
+			$ssh_issue = 1;
+			$action = 2;
+			logger("sshd: Login $user $ip") if ($debug);
+		} elsif ( $_=~ /Bad protocol version identification/ ) {
+			#May 15 09:33:45 serv01 sshd[29645]: Bad protocol version identification '0penssh-portable-com' from 194.204.32.101
+			my @sshd = split /\s+/, $_;
+			$sshd[11] =~ s/::ffff://;
+			$ip = $sshd[11];
+			$user = 'none';
+			$message = $_;
+			$ssh_issue = 1;
+			$action = 2;
+			logger("sshd: Grabber $user $ip $message");
 		}
-		next if ( $ip =~ /$myip/ );	# this is the local server
-		$log_me->execute($ip, $user, 'ssh');
-		if ( exists $ssh_faults {$ip} ) {
-			$ssh_faults{$ip}++;
+
+		if ($ssh_issue) {
+			if ($action == 1) {
+				next if ( $ip =~ /$myip/ );	# this is the local server
+				$log_me->execute($ip, $user, 'ssh');
+				if ( exists $ssh_faults {$ip} ) {
+					$ssh_faults{$ip}++;
+				} else {
+					$ssh_faults{$ip} = 1;
+				}
+			} elsif ($action == 2) {
+				
+			} else {
+				logger("sshd: Unknown action on sshd issue!");
+			}
 		} else {
-			$ssh_faults{$ip} = 1;
+			logger("sshd: Unknown case");
 		}
-		logger(" IP $ip failed to identify to ssh.") if ($debug);
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
 		# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
 		# Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
@@ -590,19 +688,22 @@ while (<LOGS>) {
 	check_broot();
 
 	my $curr_time = time();
-	my $passed_time = $curr_time - $start_time;	# get the pssed time
-	if ($passed_time > $broot_time) {		# if the passed time is grater then $broot_time
+
+	if (($curr_time - $start_time) > $broot_time) {		# if the passed time is grater then $broot_time
 		cleanh();							# clean the hashes
 		$start_time = time();				# set the start_time to now
 	}
 
-	my $pop_passed_time = $curr_time - $pop_time;
-	if ($pop_passed_time >= 300) {
+	if (($curr_time - $pop_time) > 300) {
 		logger("Checking the popbeforesmtp hash") if ($debug);
 		clean_ips();				# clean the authenticated_ips_file
 		$pop_time = time();			# set the pop_time to now
 	}
 
+	if (($curr_time - $fw_time) > $firewall_update) {
+		logger("Reloading the firewall rules");
+		$fw_time = time();
+	}
 }
 
 close LOGS;
