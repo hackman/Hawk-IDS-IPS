@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime), qw(WNOHANG);	# use only setsid & strftime fr
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.90';	# version string
+my $version = '0.91';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -18,6 +18,7 @@ our %cpanel_faults = ();	# cpanel faults storage
 our %notifications = ();	# notifications
 our %possible_attackers = ();	# possible hack attempts
 our %authenticated_ips = ();	# authenticated_ips storage
+our %reported_ips = ();
 
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
@@ -31,6 +32,7 @@ my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamp
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
 our $firewall_update = 5400; # time(in seconds) before updating the firewall
+our $clean_reported = 600;
 our %allowed_ips = ();
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 our $debug = 0;			# by default debuging is OFF
@@ -57,6 +59,7 @@ $hostname = <HOST>;
 close HOST;
 #$hostname =~ s/[\r|\n]//;
 $hostname =~ s/serv01.//;
+chomp ($hostname);
 
 open EXIM, '<', '/etc/exim.conf' or die "Unable to open exim.conf: $!\n";
 while (<EXIM>) {
@@ -191,7 +194,7 @@ sub clean_ips {
 				chomp($auth_ip);
 				foreach my $ip (@to_be_removed) {
 					if ($auth_ip =~ /$ip/) {
-						logger("$auth_ip will be removed");
+						logger("$auth_ip will be removed") if ($debug);
 						$skip_ip = 1;
 					}
 				}
@@ -232,10 +235,10 @@ sub check_broot {
 			if (defined($possible_attackers{$k}[3])) {
 				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
 					$possible_attackers{$k}[3] = 6;
-					notify_hack("$hostname possible break in, ".$possible_attackers{$k}[0]." attempts from ip $k(".$possible_attackers{$k}[2].')');
+					notify_hack("ip: $k attempts: $possible_attackers{$k}[2] server: $hostname bruteforce $possible_attackers{$k}[0]");
 				}
 			} else {
-				notify_hack("$hostname possible break in, ".$possible_attackers{$k}[0]." attempts from ip $k(".$possible_attackers{$k}[2].')');
+				notify_hack("ip: $k attempts: $possible_attackers{$k}[2] server: $hostname bruteforce $possible_attackers{$k}[0]");
 				$possible_attackers{$k}[3] = 1;
 			}
 		}
@@ -251,8 +254,10 @@ umask 0;
 # redirect standart file descriptors to /dev/null
 open STDIN, '<', '/dev/null' or die "DIE: Cannot read stdin: $! \n";
 open STDOUT, '>>', '/dev/null' or die "DIE: Cannot write to stdout: $! \n";
-if (!$debug) {
-	open STDERR, '>>', "$logfile" or die "DIE: Cannot write to stderr: $! \n";
+if ($debug) {
+	open STDERR, '>>', "$logfile" or die "DIE: Cannot write to $logfile: $! \n";
+} else {
+	open STDERR, '>>', '/dev/null' or die "DIE: Cannot write to stderr: $! \n";
 }
 
 # write the program pid to the $pidfile
@@ -279,18 +284,32 @@ my $get_failed = $conn->prepare('SELECT COUNT(id) AS id FROM failed_log')
 # notifications to admins
 
 sub notify_hack {
-	my $message = shift;
-	my $enabled = 0;
-	my $dbhost	= '209.85.112.32';
-	my $dbuser	= 'parolcho';
-	my $dbpass	= 'parolataa';
-	my $dbase	= 'sitechecker';	
+	my @message = split /\s+/, shift;
+	my $enabled = 1;
+	my $internal = 0;
+	my $dbhost = '209.85.112.32';
+	my $dbuser = 'parolcho';
+	my $dbpass = 'parolataa';
+	my $dbase = 'sitechecker';	
 	if ($enabled) {	
-		my $mconn = DBI->connect("DBI:mysql:database=$dbase:host=$dbhost","$dbuser","$dbpass", {'RaiseError' => 0});
-		my $notify = $mconn->prepare("INSERT internal_notes(servername,date,notice) VALUES('$hostname' , now(), '$message')");
-		$notify->execute;
-		$notify->finish;
-		$mconn->disconnect;
+		my $mask = $message[1];
+		$mask =~ s/\.[0-9]{1,3}$/\.0/;
+		$internal = 1 if (defined($allowed_ips{$message[1]}) || defined($allowed_ips{$mask}));
+		if (! $internal) {
+			my $now = time();
+			if (defined($reported_ips{$message[1]}) && (($now - $reported_ips{$message[1]}[1]) < $clean_reported)) {
+				logger("$message[1] already reported as intruder!") if ($debug);
+			} else {
+				logger("Intruder @message ... notifying our monitoring!") if ($debug);
+				my $mconn = DBI->connect("DBI:mysql:database=$dbase:host=$dbhost","$dbuser","$dbpass", {'RaiseError' => 0});
+				my $notify = $mconn->prepare("INSERT internal_notes(servername,date,notice) VALUES('$hostname' , now(), '@message')");
+				$notify->execute;
+				$notify->finish;
+				$mconn->disconnect;
+				$reported_ips{$message[1]}[0] = $message[1];
+				$reported_ips{$message[1]}[1] = $now;
+			}
+		}
 	}
 }
 
@@ -360,12 +379,12 @@ sub firewall_update {
 			print $sock "GET /~sentry/cgi-bin/hawkup.cgi?server=$hostname\n\n";
 			while (<$sock>) {
 				chomp($_);
-				logger("Socket answer $_");
+				logger("Socket answer $_") if ($debug);
 				$allowed_ips{$_} = $_;
 			}
 			close $sock;
 			while (my $ip = each (%allowed_ips)) {
-				logger("Allowed IPs hash entry $ip");
+				logger("Allowed IPs hash entry $ip") if ($debug);
 			}
 		} else {
 			logger("Unable to connect to report IO error: $!");
@@ -555,12 +574,13 @@ while (<LOGS>) {
 		my $user = $ip;
 		$user =~ s/\((.*)\@.*/$1/;
 		$ip   =~ s/.*\@(.*)\)/$1/;
- 		notify_hack("Possible hack attempt at $hostname to user $user from ip $ip");
+ 		notify_hack("ip: $ip user: $user server: $hostname ftpd: .htaccess uploaded");
  	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
 		chomp($_);
+		next if ($_ =~ /input_userauth_request:/);
 		my $ip = '';
 		my $user = '';
-		my $message = '';
+		my $message = $_;
 		my $ssh_issue = 0;
 		my $action = 0;
 		if ( $_ =~ /Failed password for/ || $_ =~ /Failed none for/ || $_ =~ /authentication failure/ || $_ =~ /Invalid user/ || $_ =~ /Connection closed by/ ) {
@@ -572,21 +592,21 @@ while (<LOGS>) {
 				$ip = $sshd[12];
 				$user = $sshd[10];
 				$ssh_issue = 1;
-				logger("sshd: Incorrect V1 $user $ip");
+				logger("sshd: Incorrect V1 $user $ip $message") if ($debug);
 			} elsif ( $sshd[5] =~ /Connection/ ) {
 				#May 25 02:11:34 serv01 sshd[10146]: Connection closed by 87.118.135.130
 				$sshd[8] =~ s/::ffff://;
 				$ip = $sshd[8];
 				$user = 'none';
 				$ssh_issue = 1;
-				logger("sshd: Incorrect KEY $user $ip");
+				logger("sshd: Incorrect KEY $user $ip $message") if ($debug);
 			} elsif ( $sshd[5] =~ /Invalid/) {
 				#May 19 22:54:19 serv01 sshd[21552]: Invalid user supprot from 194.204.32.101
 				$sshd[9] =~ s/::ffff://;
 				$ip = $sshd[9];
 				$user = $sshd[7];
 				$ssh_issue = 1;
-				logger("sshd: Incorrect V2 $user $ip");
+				logger("sshd: Incorrect V2 $user $ip $message") if ($debug);
 			} elsif ( $sshd[5] =~ /pam_unix\(sshd:auth\)/ ) {
 				#May 15 09:39:10 serv01 sshd[9474]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=194.204.32.101  user=root
 				$sshd[13] =~ s/::ffff://;
@@ -594,7 +614,7 @@ while (<LOGS>) {
 				$ip = $sshd[13];
 				$user = $sshd[14];
 				$ssh_issue = 1;
-				logger("sshd: Incorrect PAM $user $ip");
+				logger("sshd: Incorrect PAM $user $ip $message") if ($debug);
 			} else {
 				#May 15 09:39:12 serv01 sshd[9474]: Failed password for root from 194.204.32.101 port 17326 ssh2
 				#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
@@ -602,9 +622,9 @@ while (<LOGS>) {
 				$ip = $sshd[10];
 				$user = $sshd[8];
 				$ssh_issue = 1;
-				logger("sshd: Incorrect V3 $user $ip");
+				logger("sshd: Incorrect V3 $user $ip $message") if ($debug);
 			}
-			$action = 1;
+			$action = 1 if ($ssh_issue);
 		} elsif ( $_ =~ /Accepted publickey/ || $_ =~ /Accepted password/ ) {
 			#May 25 00:48:58 serv01 sshd[16015]: Accepted publickey for root from 75.125.60.5 port 32863 ssh2
 			#May 20 00:51:54 serv01 sshd[20568]: Accepted password for support from ::ffff:67.15.245.5 port 50336 ssh2
@@ -613,25 +633,25 @@ while (<LOGS>) {
 			$sshd[10] =~ s/::ffff://;
 			$ip = $sshd[10];
 			$user = $sshd[8];
-			$message = $_;
 			$ssh_issue = 1;
 			$action = 2;
-			logger("sshd: Login $user $ip") if ($debug);
+			logger("sshd: Login $user $ip $message") if ($debug);
 		} elsif ( $_=~ /Bad protocol version identification/ ) {
 			#May 15 09:33:45 serv01 sshd[29645]: Bad protocol version identification '0penssh-portable-com' from 194.204.32.101
 			my @sshd = split /\s+/, $_;
 			$sshd[11] =~ s/::ffff://;
 			$ip = $sshd[11];
 			$user = 'none';
-			$message = $_;
 			$ssh_issue = 1;
 			$action = 2;
-			logger("sshd: Grabber $user $ip $message");
+			logger("sshd: Grabber $user $ip $message") if ($debug);
 		}
 
 		if ($ssh_issue) {
+			$message =~ s/\'//g;
 			if ($action == 1) {
 				next if ( $ip =~ /$myip/ );	# this is the local server
+				notify_hack("ip: $ip user: $user server: $hostname sshd: bruteforce verbose: $message");
 				$log_me->execute($ip, $user, 'ssh');
 				if ( exists $ssh_faults {$ip} ) {
 					$ssh_faults{$ip}++;
@@ -639,12 +659,12 @@ while (<LOGS>) {
 					$ssh_faults{$ip} = 1;
 				}
 			} elsif ($action == 2) {
-				
+				notify_hack("ip: $ip user: $user server: $hostname sshd: unauthorized verbose: $message");
 			} else {
 				logger("sshd: Unknown action on sshd issue!");
 			}
 		} else {
-			logger("sshd: Unknown case");
+			logger("sshd: Unknown case verbose: $message");
 		}
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
 		# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
@@ -695,13 +715,12 @@ while (<LOGS>) {
 	}
 
 	if (($curr_time - $pop_time) > 300) {
-		logger("Checking the popbeforesmtp hash") if ($debug);
 		clean_ips();				# clean the authenticated_ips_file
 		$pop_time = time();			# set the pop_time to now
 	}
 
 	if (($curr_time - $fw_time) > $firewall_update) {
-		logger("Reloading the firewall rules");
+		firewall_update();
 		$fw_time = time();
 	}
 }
