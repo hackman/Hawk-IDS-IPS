@@ -235,10 +235,10 @@ sub check_broot {
 			if (defined($possible_attackers{$k}[3])) {
 				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
 					$possible_attackers{$k}[3] = 6;
-					notify_hack("ip: $k attempts: $possible_attackers{$k}[2] server: $hostname bruteforce $possible_attackers{$k}[0]");
+					notify_hack("ip: $k service: $possible_attackers{$k}[2] attempts: $possible_attackers{$k}[0] type: bruteforce server: $hostname");
 				}
 			} else {
-				notify_hack("ip: $k attempts: $possible_attackers{$k}[2] server: $hostname bruteforce $possible_attackers{$k}[0]");
+				notify_hack("ip: $k service: $possible_attackers{$k}[2] attempts: $possible_attackers{$k}[0] type: bruteforce server: $hostname");
 				$possible_attackers{$k}[3] = 1;
 			}
 		}
@@ -574,7 +574,7 @@ while (<LOGS>) {
 		my $user = $ip;
 		$user =~ s/\((.*)\@.*/$1/;
 		$ip   =~ s/.*\@(.*)\)/$1/;
- 		notify_hack("ip: $ip user: $user server: $hostname ftpd: .htaccess uploaded");
+ 		#notify_hack("ip: $ip service: ftpd user: $user server: $hostname type: uploaded .htaccess");
  	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
 		chomp($_);
 		next if ($_ =~ /input_userauth_request:/);
@@ -651,7 +651,7 @@ while (<LOGS>) {
 			$message =~ s/\'//g;
 			if ($action == 1) {
 				next if ( $ip =~ /$myip/ );	# this is the local server
-				notify_hack("ip: $ip user: $user server: $hostname sshd: bruteforce verbose: $message");
+				notify_hack("ip: $ip service: sshd user: $user type: bruteforce server: $hostname verbose: $message");
 				$log_me->execute($ip, $user, 'ssh');
 				if ( exists $ssh_faults {$ip} ) {
 					$ssh_faults{$ip}++;
@@ -659,7 +659,7 @@ while (<LOGS>) {
 					$ssh_faults{$ip} = 1;
 				}
 			} elsif ($action == 2) {
-				notify_hack("ip: $ip user: $user server: $hostname sshd: unauthorized verbose: $message");
+				notify_hack("ip: $ip service: sshd user: $user type: UNAUTHORIZED server: $hostname verbose: $message");
 			} else {
 				logger("sshd: Unknown action on sshd issue!");
 			}
