@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime), qw(WNOHANG);	# use only setsid & strftime fr
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.91';	# version string
+my $version = '0.92';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -31,7 +31,7 @@ my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
 my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamps for I/O Errors
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 our $broot_time = 300;	# time(in seconds) before cleaning the hashes
-our $firewall_update = 5400; # time(in seconds) before updating the firewall
+our $firewall_update_time = 5400; # time(in seconds) before updating the firewall
 our $clean_reported = 600;
 our %allowed_ips = ();
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
@@ -84,9 +84,10 @@ $0 = "[Hawk]";
 open HAWK, '>>', $logfile or die "DIE: Unable to open logfile $logfile: $!\n";
 logger("Hawk version $version started!");
 
+$SIG{"HUP"} = \&sigHup;
+$SIG{"CHLD"} = \&sigChld;
 # execute this before DIE-ing :)
 $SIG{__DIE__}  = sub { logger(@_); };
-$SIG{"CHLD"} = \&sigChld;
 
 # check if the daemon is running
 if ( -e $pidfile ) {
@@ -369,7 +370,7 @@ sub send_fault() {
 }
 
 sub firewall_update {
-    delete @allowed_ips{keys %allowed_ips};
+	my %own_rules = ();
 	eval {
 		local $SIG{ALRM} = sub { die 'alarm'; };
 		alarm 5;
@@ -380,20 +381,26 @@ sub firewall_update {
 			while (<$sock>) {
 				chomp($_);
 				logger("Socket answer $_") if ($debug);
-				$allowed_ips{$_} = $_;
+				$own_rules{$_} = $_;
 			}
 			close $sock;
-			while (my $ip = each (%allowed_ips)) {
+			while (my $ip = each (%own_rules)) {
 				logger("Allowed IPs hash entry $ip") if ($debug);
 			}
 		} else {
-			logger("Unable to connect to report IO error: $!");
+			logger("Unable to get our allowed hosts list: $!");
 		}
         alarm 0;
     };
+	return %own_rules;
 }
 
-firewall_update();
+%allowed_ips = firewall_update();
+
+sub sigHup {
+	logger("sigHup detected! Are you my master?");
+	%allowed_ips = firewall_update();
+}
 
 while (<LOGS>) {
 	if ($dovecot) {
@@ -719,8 +726,8 @@ while (<LOGS>) {
 		$pop_time = time();			# set the pop_time to now
 	}
 
-	if (($curr_time - $fw_time) > $firewall_update) {
-		firewall_update();
+	if (($curr_time - $fw_time) > $firewall_update_time) {
+		%allowed_ips = firewall_update();
 		$fw_time = time();
 	}
 }
