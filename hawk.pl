@@ -6,7 +6,7 @@ use POSIX qw(setsid), qw(strftime), qw(WNOHANG);	# use only setsid & strftime fr
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.92';	# version string
+my $version = '1.00';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -23,7 +23,7 @@ our %reported_ips = ();
 # make DB vars
 my $db		= 'DBI:Pg:database=hawk;host=localhost;port=5432';
 my $user	= 'hawk';
-my $pass	= '19b536501eea';
+my $pass	= '84109da040e6';
 
 # Hawk files
 my $logfile = '/var/log/hawk.log';	# daemon logfile
@@ -236,10 +236,10 @@ sub check_broot {
 			if (defined($possible_attackers{$k}[3])) {
 				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
 					$possible_attackers{$k}[3] = 6;
-					notify_hack("ip: $k service: $possible_attackers{$k}[2] attempts: $possible_attackers{$k}[0] type: bruteforce server: $hostname");
+					notify_hack("BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
 				}
 			} else {
-				notify_hack("ip: $k service: $possible_attackers{$k}[2] attempts: $possible_attackers{$k}[0] type: bruteforce server: $hostname");
+				notify_hack("BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
 				$possible_attackers{$k}[3] = 1;
 			}
 		}
@@ -283,35 +283,41 @@ my $get_failed = $conn->prepare('SELECT COUNT(id) AS id FROM failed_log')
 	or die "Unable to prepare log query: $!\n";
 
 # notifications to admins
-
 sub notify_hack {
-	my @message = split /\s+/, shift;
+	my @message = split /\|\|/, $_[0];
 	my $enabled = 1;
 	my $internal = 0;
-	my $dbhost = '209.85.112.32';
-	my $dbuser = 'parolcho';
-	my $dbpass = 'parolataa';
-	my $dbase = 'sitechecker';	
-	if ($enabled) {	
-		my $mask = $message[1];
-		$mask =~ s/\.[0-9]{1,3}$/\.0/;
-		$internal = 1 if (defined($allowed_ips{$message[1]}) || defined($allowed_ips{$mask}));
-		if (! $internal) {
-			my $now = time();
-			if (defined($reported_ips{$message[1]}) && (($now - $reported_ips{$message[1]}[1]) < $clean_reported)) {
-				logger("$message[1] already reported as intruder!") if ($debug);
-			} else {
-				logger("Intruder @message ... notifying our monitoring!") if ($debug);
-				my $mconn = DBI->connect("DBI:mysql:database=$dbase:host=$dbhost","$dbuser","$dbpass", {'RaiseError' => 0});
-				my $notify = $mconn->prepare("INSERT internal_notes(servername,date,notice) VALUES('$hostname' , now(), '@message')");
-				$notify->execute;
-				$notify->finish;
-				$mconn->disconnect;
-				$reported_ips{$message[1]}[0] = $message[1];
-				$reported_ips{$message[1]}[1] = $now;
-			}
-		}
+	return if (!$enabled);
+	my $mask = $message[2];
+	$mask =~ s/\.[0-9]{1,3}$/\.0/;
+	logger("We got ip $message[2] with mask $mask") if ($debug);
+	$internal = 1 if (defined($allowed_ips{$message[2]}) || defined($allowed_ips{$mask}));
+	return if ($internal);
+	my $now = time();
+	if (defined($reported_ips{$message[2]}) && (($now - $reported_ips{$message[2]}[1]) < $clean_reported)) {
+		logger("$message[2] already reported as intruder!") if ($debug);
+		return;
 	}
+
+	logger("Intruder @message ... notifying our monitoring!") if ($debug);
+	eval {
+		my $post_string = "sender=1&template=2&options=".$_[0]."";
+		my $post_size = length($post_string);
+		my $request="POST /notes/postnote.cgi HTTP/1.1\nHost: notes.sgvps.net\nContent-Type: application/x-www-form-urlencoded\nConnection: close\nContent-Length: $post_size\n\n".$post_string."\n\nquit\n\n";
+
+		local $SIG{ALRM} = sub { die 'alarm'; };
+		alarm 5;
+		use IO::Socket::INET;
+		my $sock = new IO::Socket::INET ( PeerAddr => 'notes.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3')
+			or logger "Unable to connect to report intruder error: $!";
+		print $sock "$request";
+		my @replay = <$sock>;
+		logger("Received reply: @replay") if ($debug);
+		close $sock;
+	};
+	alarm 0;
+	$reported_ips{$message[2]}[0] = $message[2];
+	$reported_ips{$message[2]}[1] = $now;
 }
 
 sub notify {
@@ -584,7 +590,7 @@ while (<LOGS>) {
  		#notify_hack("ip: $ip service: ftpd user: $user server: $hostname type: uploaded .htaccess");
  	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
 		chomp($_);
-		next if ($_ =~ /input_userauth_request:/);
+		next if ($_ =~ /input_userauth_request:/ );
 		my $ip = '';
 		my $user = '';
 		my $message = $_;
@@ -632,7 +638,7 @@ while (<LOGS>) {
 				logger("sshd: Incorrect V3 $user $ip $message") if ($debug);
 			}
 			$action = 1 if ($ssh_issue);
-		} elsif ( $_ =~ /Accepted publickey/ || $_ =~ /Accepted password/ ) {
+		} elsif ( $_ =~ /Accepted publickey/ || $_ =~ /Accepted password/ || $_ =~ /Postponed publickey for/) {
 			#May 25 00:48:58 serv01 sshd[16015]: Accepted publickey for root from 75.125.60.5 port 32863 ssh2
 			#May 20 00:51:54 serv01 sshd[20568]: Accepted password for support from ::ffff:67.15.245.5 port 50336 ssh2
 			#May 20 01:14:46 serv01 sshd[17692]: Accepted password for support from ::ffff:67.15.245.5 port 59698 ssh2
@@ -658,7 +664,7 @@ while (<LOGS>) {
 			$message =~ s/\'//g;
 			if ($action == 1) {
 				next if ( $ip =~ /$myip/ );	# this is the local server
-				notify_hack("ip: $ip service: sshd user: $user type: bruteforce server: $hostname verbose: $message");
+				notify_hack("BRUTEFORCE||sshd||$ip||$message");
 				$log_me->execute($ip, $user, 'ssh');
 				if ( exists $ssh_faults {$ip} ) {
 					$ssh_faults{$ip}++;
@@ -666,7 +672,7 @@ while (<LOGS>) {
 					$ssh_faults{$ip} = 1;
 				}
 			} elsif ($action == 2) {
-				notify_hack("ip: $ip service: sshd user: $user type: UNAUTHORIZED server: $hostname verbose: $message");
+				notify_hack("UNAUTHORIZED||sshd||$ip||$message");
 			} else {
 				logger("sshd: Unknown action on sshd issue!");
 			}
