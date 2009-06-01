@@ -2,11 +2,22 @@
 use strict;
 use warnings;
 use DBD::mysql;
-use POSIX qw(setsid), qw(strftime), qw(WNOHANG);	# use only setsid & strftime from POSIX
+use POSIX qw(setsid), qw(strftime), qw(WNOHANG), qw(:signal_h);	# use only setsid & strftime from POSIX
+use FindBin ();
+use File::Basename ();
+use File::Spec::Functions;
+
+my $script = File::Basename::basename($0);
+my $SELF = catfile $FindBin::Bin, $script;
+my $sigset = POSIX::SigSet->new();
+
+my $action = POSIX::SigAction->new('sigHup',$sigset,&POSIX::SA_NODEFER);
+
+POSIX::sigaction(&POSIX::SIGHUP, $action);
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '1.00';	# version string
+my $version = '1.10';	# version string
 
 # defining fault hashes
 our %ssh_faults = ();		# ssh faults storage
@@ -36,6 +47,7 @@ our $clean_reported = 600;
 our %allowed_ips = ();
 our $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 our $debug = 0;			# by default debuging is OFF
+our $hup = 0;
 our $do_limit = 0;		# by default do not limit the offending IPs
 our $authenticated_ips_file = '/etc/relayhosts';	# Authenticated to Dovecot IPs are stored here
 my $courier_imap = 0;
@@ -50,8 +62,12 @@ my $myip = get_ip();
 my $hostname = '';
 
 # check for debug
-if ( defined($ARGV[0]) && $ARGV[0] =~ /debug/ ) {
-	$debug=1;		# turn on debuging
+if (defined($ARGV[0])) {
+	if ($ARGV[0] =~ /debug/) {
+		$debug=1;		# turn on debuging
+	} elsif ($ARGV[0] =~ /hup/) {
+		$hup=1;
+	}
 }
 
 open HOST, '<', '/proc/sys/kernel/hostname' or die "Unable to open hostname file: $!\n";
@@ -84,7 +100,7 @@ $0 = "[Hawk]";
 open HAWK, '>>', $logfile or die "DIE: Unable to open logfile $logfile: $!\n";
 logger("Hawk version $version started!");
 
-$SIG{"HUP"} = \&sigHup;
+#$SIG{"HUP"} = \&sigHup;
 $SIG{"CHLD"} = \&sigChld;
 # execute this before DIE-ing :)
 $SIG{__DIE__}  = sub { logger(@_); };
@@ -97,7 +113,7 @@ if ( -e $pidfile ) {
 	close PIDFILE;
 	# check if $old_pid is still running
 	if ( $old_pid =~ /[0-9]+/ ) {
-		if ( -d "/proc/$old_pid" ) {
+		if ( -d "/proc/$old_pid" && !$hup) {
 			logger("Hawk is already running!");
 			die "DIE: Hawk is already running!\n";
 		}
@@ -279,8 +295,26 @@ our $log_me = $conn->prepare('INSERT INTO failed_log ( ip, "user", service ) VAL
 	or die "DIE: Unable to prepare log query: $!\n";
 our $broot_me = $conn->prepare('INSERT INTO broots ( ip, service ) VALUES ( ?, ? ) ') 
 	or die "DIE: Unable to prepare broot query: $!\n";
-my $get_failed = $conn->prepare('SELECT COUNT(id) AS id FROM failed_log') 
-	or die "Unable to prepare log query: $!\n";
+
+sub store_to_db {
+	# $_[0] log_me || broot_me
+	our $conn = DBI->connect_cached( $db, $user, $pass, { PrintError => 1, AutoCommit => 1 }) or logger("Unable to connect to the database while trying to log $_[0]: $!");
+	our $log_me = $conn->prepare('INSERT INTO failed_log ( ip, "user", service ) VALUES ( ?, ?, ? ) ') or logger("Unable to prepare the log query: $!");
+	our $broot_me = $conn->prepare('INSERT INTO broots ( ip, service ) VALUES ( ?, ? ) ') or logger("Unable to prepare the broot_me query: $!");
+
+	if ($_[0] eq 'log_me') {
+		logger("Got caller $_[0] with argvs: $_[1], $_[2], $_[3]") if ($debug);
+		$log_me->execute($_[1], $_[2], $_[3]) or logger("log_me insert failed ($_[1], $_[2], $_[3]) | $DBI::errstr");
+	} elsif ($_[0] eq 'broot_me') {
+		logger("Got caller $_[0] with argvs: $_[1], $_[2]") if ($debug);
+		$broot_me->execute($_[1], $_[2]) or logger("broot_me insert failed ($_[1], $_[2]) | $DBI::errstr");
+	} elsif (defined($_[0])) {
+		logger("Unknown store_to_db caller $_[0]");
+	} else {
+		logger("Weird undefined store_to_db caller");
+	}
+	$conn->disconnect;
+}
 
 # notifications to admins
 sub notify_hack {
@@ -335,7 +369,8 @@ sub notify {
 	# log to DB and file
 	if ( ! exists $notifications {$_[1]} ) { 
 		$notifications{$_[1]}=1;
-		$broot_me->execute($_[1],$_[0]) or logger("Failed broot: $_[0], $_[1], $_[2] |$DBI::errstr");
+		store_to_db('broot_me', $_[1], $_[0]);
+		#$broot_me->execute($_[1],$_[0]) or logger("Unable to log the broot: $_[0], $_[1], $_[2] | $DBI::errstr");
 		logger("!!! $_[0] $_[1] failed $_[2] times in $broot_time seconds");
 	}
 	# Limit the offender
@@ -360,10 +395,15 @@ sub send_fault() {
 		local $SIG{ALRM} = sub { die 'alarm'; };
 		alarm 5;
 		use IO::Socket::INET;
-		if ( my $sock = new IO::Socket::INET ( PeerAddr => 'master.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3') ) {
+		if ( my $sock = new IO::Socket::INET ( PeerAddr => 'notes.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3') ) {
+			my $post_string = "sender=1&template=1&options=".$_[0]."";
+			my $post_size = length($post_string);
+			my $request="POST /notes/postnote.cgi HTTP/1.1\nHost: notes.sgvps.net\nContent-Type: application/x-www-form-urlencoded\nConnection: close\nContent-Length: $post_size\n\n".$post_string."\n\nquit\n\n";
+			print $sock "$request";
 			# Send the faulty drive!
-			print $sock "GET /~sentry/cgi-bin/ioerrors.pl?hdd=$_[0]\n\n";
+			#print $sock "GET /~sentry/cgi-bin/ioerrors.pl?hdd=$_[0]\n\n";
 			my @replay = <$sock>;
+			logger("IOreply: @replay") if ($debug);
 			close $sock;
 		} else {
 			logger "Unable to connect to report IO error: $!";
@@ -405,7 +445,9 @@ sub firewall_update {
 
 sub sigHup {
 	logger("sigHup detected! Are you my master?");
-	%allowed_ips = firewall_update();
+	$SELF =~ /^(.*)$/s;
+	$SELF = $1;
+	exec("$SELF", 'hup') or die "Couldn't restart: $!\n";
 }
 
 while (<LOGS>) {
@@ -429,7 +471,7 @@ while (<LOGS>) {
 				#Jan 27 23:09:37 serv01 dovecot: pop3-login: user=<aaa>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 8 attempts)
 				$pop3[8] =~ s/rip=(.*),/$1/;
 				$pop3[6] =~ s/user=<(.*)>,/$1/;
-				next if ( $pop3[8] =~ /$myip/ );	# this is the local server
+				next if ( $pop3[8] =~ /$myip/ || $pop3[8] =~ /127.0.0.1/);	# this is the local server
 				if (exists $possible_attackers{$pop3[8]}) {
 					$possible_attackers{$pop3[8]}[0] = $possible_attackers{$pop3[8]}[0] + $pop3[$failed_entry];
 					$possible_attackers{$pop3[8]}[1] = $pop3[6];
@@ -438,7 +480,8 @@ while (<LOGS>) {
 					$possible_attackers{$pop3[8]} = [ $pop3[$failed_entry], $pop3[6], 'pop3' ];
 					logger("Possible attacker first attempt from ip ".$pop3[8]) if ($debug);
 				}
-				$log_me->execute($pop3[8], $pop3[6], 'pop3');
+				store_to_db('log_me', $pop3[8], $pop3[6], 'pop3');
+				#$log_me->execute($pop3[8], $pop3[6], 'pop3') or logger("Unable to log ($pop3[8], $pop3[6], 'pop3') | $DBI::errstr");
 				if (exists $pop3_faults{$pop3[8]}) {
 					$pop3_faults{$pop3[8]} = $pop3_faults{$pop3[8]} + $pop3[$failed_entry];
 				} else {
@@ -466,7 +509,7 @@ while (<LOGS>) {
 				# Jan 27 23:33:24 serv01 dovecot: imap-login: user=<test>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 3 attempts)
 				$imap[8] =~ s/rip=(.*),/$1/;
 				$imap[6] =~ s/user=<(.*)>,/$1/;
-				next if ( $imap[8] =~ /$myip/ );	# this is the local server
+				next if ( $imap[8] =~ /$myip/ || $imap[8] =~ /127.0.0.1/ );	# this is the local server
 				if (exists $possible_attackers{$imap[8]}) {
 					$possible_attackers{$imap[8]}[0] = $possible_attackers{$imap[8]}[0] + $imap[$failed_entry];
 					$possible_attackers{$imap[8]}[1] = $imap[6];
@@ -475,7 +518,8 @@ while (<LOGS>) {
 					$possible_attackers{$imap[8]} = [ $imap[$failed_entry], $imap[6], 'imap' ];
 					logger("Possible attacker first attempt from ip ".$imap[8]) if ($debug);
 				}
-				$log_me->execute($imap[8], $imap[6], 'imap');
+				store_to_db('log_me', $imap[8], $imap[6], 'imap');
+				#$log_me->execute($imap[8], $imap[6], 'imap') or logger("Unable to log ($imap[8], $imap[6], 'imap') | $DBI::errstr");
 				if ( exists $imap_faults {$imap[8]} ) {
 					$imap_faults{$imap[8]} = $imap_faults{$imap[8]} + $imap[$failed_entry];
 				} else {
@@ -492,7 +536,7 @@ while (<LOGS>) {
 			$pop3[8] =~ s/ip=\[(.*)\]/$1/;
 			$pop3[7] =~ s/user=(.*),/$1/;
 			$pop3[8] =~ s/.*:// if $pop3[8] =~ /ffff/;
-			next if ( $pop3[8] =~ /$myip/ );	# this is the local server
+			next if ( $pop3[8] =~ /$myip/ || $pop3[8] =~ /127.0.0.1/ );	# this is the local server
 			if ( exists $possible_attackers {$pop3[8]} && $possible_attackers{$pop3[8]}[1] ne $pop3[7] ) {
 				$possible_attackers{$pop3[8]}[0]++;
 				$possible_attackers{$pop3[8]}[1] = $pop3[7];
@@ -501,7 +545,8 @@ while (<LOGS>) {
 				$possible_attackers{$pop3[8]} = [ 0, $pop3[7], 'pop3' ];
 				logger("Possible attacker first attempt with different usernames from ip ".$pop3[8]) if ($debug);
 			}
-			$log_me->execute($pop3[8], $pop3[7], 'pop3');
+			store_to_db('log_me', $pop3[8], $pop3[7], 'pop3');
+			#$log_me->execute($pop3[8], $pop3[7], 'pop3') or logger("Unable to log ($pop3[8], $pop3[7], 'pop3') | $DBI::errstr");
 			if ( exists $pop3_faults {$pop3[8]} ) {
 				$pop3_faults{$pop3[8]}++;
 			} else {
@@ -513,7 +558,7 @@ while (<LOGS>) {
 			my @imap = split /\s+/, $_;
 			$imap[8] =~ s/host=\[::ffff:(.*)\]/$1/;
 			$imap[7] =~ s/user=//;
-			next if ( $imap[8] =~ /$myip/ );	# this is the local server
+			next if ( $imap[8] =~ /$myip/ || $imap[8] =~ /127.0.0.1/ );	# this is the local server
 			if ( exists $possible_attackers {$imap[8]} && $possible_attackers{$imap[8]}[1] ne $imap[7] ) {
 				$possible_attackers{$imap[8]}[0]++;
 				$possible_attackers{$imap[8]}[1] = $imap[7];
@@ -522,7 +567,8 @@ while (<LOGS>) {
 				$possible_attackers{$imap[8]} = [ 0, $imap[7], 'imap' ];
 				logger("Possible attacker first attempt with different usernames from ip ".$imap[8]) if ($debug);
 			}
-			$log_me->execute($imap[8], $imap[7], 'imap');
+			store_to_db('log_me', $imap[8], $imap[7], 'imap');
+			#$log_me->execute($imap[8], $imap[7], 'imap') or logger("Unable to log ($imap[8], $imap[7], 'imap') | $DBI::errstr");
 			if ( exists $imap_faults {$imap[8]} ) {
 				$imap_faults{$imap[8]}++;
 			} else {
@@ -536,8 +582,9 @@ while (<LOGS>) {
 			my @pop3 = split /\s+/, $_;
 			if ( defined($pop3[10]) && $pop3[10] =~  /realuser=/ ) {
 				$pop3[7] =~ s/host=//;
-				next if ( $pop3[7] =~ /$myip/ ); # this is the local server
-				$log_me->execute($pop3[7], '', 'pop3') or logger("Failed to insert: $pop3[7], $DBI::errstr");
+				next if ( $pop3[7] =~ /$myip/ || $pop3[7] =~ /127.0.0.1/ ); # this is the local server
+				store_to_db('log_me', $pop3[7], '', 'pop3');
+				#$log_me->execute($pop3[7], '', 'pop3') or logger("Unable to log ($pop3[7], '', 'pop3') | $DBI::errstr"); 
 				if ( exists $pop3_faults {$pop3[7]} ) {
 					$pop3_faults{$pop3[7]}++;
 				} else {
@@ -550,8 +597,9 @@ while (<LOGS>) {
 			my @imap = split /\s+/, $_;
 			$imap[10] =~ s/host=\[(.*)\]/$1/;
 			$imap[7] =~ s/user=//;
-			next if ( $imap[10] =~ /$myip/ );	# this is the local server
-			$log_me->execute($imap[10], $imap[7], 'imap');
+			next if ( $imap[10] =~ /$myip/ || $imap[10] =~ /127.0.0.1/ );	# this is the local server
+			store_to_db('log_me', $imap[10], $imap[7], 'imap');
+			#$log_me->execute($imap[10], $imap[7], 'imap') or logger("Unable to log ($imap[10], $imap[7], 'imap') | $DBI::errstr");
 			if ( exists $imap_faults {$imap[10]} ) {
 				$imap_faults{$imap[10]}++;
 			} else {
@@ -663,9 +711,10 @@ while (<LOGS>) {
 		if ($ssh_issue) {
 			$message =~ s/\'//g;
 			if ($action == 1) {
-				next if ( $ip =~ /$myip/ );	# this is the local server
+				next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/ );	# this is the local server
 				notify_hack("BRUTEFORCE||sshd||$ip||$message");
-				$log_me->execute($ip, $user, 'ssh');
+				store_to_db('log_me', $ip, $user, 'ssh');
+				#$log_me->execute($ip, $user, 'ssh') or logger("Unable to log ($ip, $user, 'ssh') | $DBI::errstr");
 				if ( exists $ssh_faults {$ip} ) {
 					$ssh_faults{$ip}++;
 				} else {
@@ -685,7 +734,8 @@ while (<LOGS>) {
 		my @ftp = split /\s+/, $_;	
  		$ftp[5] =~ s/\(.*\@(.*)\)/$1/;	# get the IP
 		$ftp[11] =~ s/\[(.*)\]/$1/;		# get the username
-		$log_me->execute($ftp[5], $ftp[11], 'ftp') or logger("Unable to execute query: $DBI::errstr");
+		store_to_db('log_me', $ftp[5], $ftp[11], 'ftp');
+		#$log_me->execute($ftp[5], $ftp[11], 'ftp') or logger("Unable to log ($ftp[5], $ftp[11], 'ftp') | $DBI::errstr"); 
 		if ( exists $possible_attackers {$ftp[5]} && $possible_attackers{$ftp[5]}[1] ne $ftp[11])  {
 			$possible_attackers{$ftp[5]}[0]++;
 			$possible_attackers{$ftp[5]}[1] = $ftp[11];
@@ -707,7 +757,8 @@ while (<LOGS>) {
 		my $service = 'webmail';
 		$service = 'cpanel' if ($cpanel[10] eq 'cpaneld:');
 		$cpanel[2] = '' if $cpanel[2] =~ /\[/;
-		$log_me->execute($cpanel[0], $cpanel[2], 'cp_'.$service);
+		store_to_db('log_me', $cpanel[0], $cpanel[2], 'cp_'.$service);
+		#$log_me->execute($cpanel[0], $cpanel[2], 'cp_'.$service) or logger("Unable to log ($cpanel[0], $cpanel[2], 'cp_'.$service) | $DBI::errstr");
 		if ( exists $cpanel_faults {$cpanel[0]} ) {
 			$cpanel_faults{$cpanel[0]}++;
 		} else {
