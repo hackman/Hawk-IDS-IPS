@@ -25,7 +25,7 @@ my %possible_attackers = ();	# possible hack attempts
 
 my %authenticated_ips = ();	# authenticated_ips storage
 my %reported_ips = ();
-my %allowed_ips = ();
+our %allowed_ips = ();
 
 my $conf = '/home/sentry/hackman/hawk-web.conf';
 my %config = parse_config($conf);
@@ -33,7 +33,6 @@ my %config = parse_config($conf);
 # Hawk files
 my $logfile = '/var/log/hawk.log';	# daemon logfile
 my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
-my $ioerrfile = '/home/sentry/public_html/io.err'; # File where to add timestamps for I/O Errors
 my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
 my $authenticated_ips_file = '/etc/relayhosts';	# Authenticated to Dovecot IPs are stored here
 
@@ -47,8 +46,8 @@ my $debug = 0;			# by default debuging is OFF
 my $do_limit = 0;		# by default do not limit the offending IPs
 my $dovecot = 1;
 my $start_time = time();
-my $io_notified = $start_time;
-my $io_first = 0;
+my $io_last_notified = $start_time;
+my $io_already_notified = 0;
 my $pop_time = $start_time;
 my $fw_time = $start_time;
 my $myip = get_ip();
@@ -211,10 +210,10 @@ sub check_broot {
 			if (defined($possible_attackers{$k}[3])) {
 				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
 					$possible_attackers{$k}[3] = 6;
-					notify_hack("BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
+					post_a_note(2, "BRUTEFORCE", $possible_attackers{$k}[2], $k, $possible_attackers{$k}[0]);
 				}
 			} else {
-				notify_hack("BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
+				post_a_note(2, "BRUTEFORCE", $possible_attackers{$k}[2], $k, $possible_attackers{$k}[0]);
 				$possible_attackers{$k}[3] = 1;
 			}
 		}
@@ -296,41 +295,47 @@ sub store_to_db {
 }
 
 # notifications to admins
-sub notify_hack {
-	my @message = split /\|\|/, $_[0];
-	my $enabled = 1;
-	my $internal = 0;
-	return if (!$enabled);
-	my $mask = $message[2];
-	$mask =~ s/\.[0-9]{1,3}$/\.0/;
-	logger("We got ip $message[2] with mask $mask") if ($debug);
-	$internal = 1 if (defined($allowed_ips{$message[2]}) || defined($allowed_ips{$mask}));
-	return if ($internal);
-	my $now = time();
-	if (defined($reported_ips{$message[2]}) && (($now - $reported_ips{$message[2]}[1]) < $clean_reported)) {
-		logger("$message[2] already reported as intruder!") if ($debug);
+sub post_a_note {
+	# $_[0] - NOTE TYPE - 1 hdd failure, 2 bruteforce attack
+	# $_[1] - Attack type - Bruteforce, Unauthorized access or drive name
+	# Used only for bruteforce
+	# $_[2] - Service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
+	# $_[3] - ip
+	# $_[4] - the exact line which forced the note function
+	my $message = '';
+	if ($_[0] == 1) {
+		$message = "$_[1]||$_[4]";
+	} elsif ($_[0] == 2) {
+		$message = "$_[1]||$_[2]||$_[3]||$_[4]"
+	} else {
+		logger("Unknown template while calling post a note");
 		return;
 	}
+	#logger("We will use template $_[0] with message $message");
+	my $post_string = "sender=1&template=".$_[0]."&options=".$message;
+	$post_string = "sender=1&template=".$_[0]."&options=".$message."&debug=SGBUGDEBUG" if ($debug);
+	my $post_size = length($post_string);
+	my $request="POST /notes/postnote.cgi HTTP/1.1\nHost: notes.sgvps.net\nContent-Type: application/x-www-form-urlencoded\nConnection: close\nContent-Length: $post_size\n\n".$post_string."\n\nquit\n\n";
 
-	logger("Intruder @message ... notifying our monitoring!") if ($debug);
-	eval {
-		my $post_string = "sender=1&template=2&options=".$_[0]."";
-		my $post_size = length($post_string);
-		my $request="POST /notes/postnote.cgi HTTP/1.1\nHost: notes.sgvps.net\nContent-Type: application/x-www-form-urlencoded\nConnection: close\nContent-Length: $post_size\n\n".$post_string."\n\nquit\n\n";
-
-		local $SIG{ALRM} = sub { die 'alarm'; };
-		alarm 5;
-		use IO::Socket::INET;
-		my $sock = new IO::Socket::INET ( PeerAddr => 'notes.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3')
-			or logger "Unable to connect to report intruder error: $!";
-		print $sock "$request";
-		my @replay = <$sock>;
-		logger("Received reply: @replay") if ($debug);
-		close $sock;
-	};
-	alarm 0;
-	$reported_ips{$message[2]}[0] = $message[2];
-	$reported_ips{$message[2]}[1] = $now;
+	my $pid = fork();
+	defined $pid or logger("Resources not avilable. Unable to fork while trying to post note ".$_[0]);
+	setsid;
+	if ($pid == 0) {
+		$0="Sending-note-".$_[0];
+		eval {
+			local $SIG{ALRM} = sub { die 'alarm'; };
+			alarm 5;
+			use IO::Socket::INET;
+			my $sock = new IO::Socket::INET ( PeerAddr => 'notes.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3')
+				or logger "Unable to connect to report intruder error: $!";
+			print $sock "$request";
+			my @replay = <$sock>;
+			logger("Received reply: @replay") if ($debug);
+			close $sock;
+		};
+		alarm 0;
+		exit 0;
+	}
 }
 
 sub notify {
@@ -368,31 +373,6 @@ sub notify {
 	}
 }
 
-sub send_fault() {
-	eval {
-		local $SIG{ALRM} = sub { die 'alarm'; };
-		alarm 5;
-		use IO::Socket::INET;
-		if ( my $sock = new IO::Socket::INET ( PeerAddr => 'notes.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3') ) {
-			my $post_string = "sender=1&template=1&options=".$_[0]."";
-			my $post_size = length($post_string);
-			my $request="POST /notes/postnote.cgi HTTP/1.1\nHost: notes.sgvps.net\nContent-Type: application/x-www-form-urlencoded\nConnection: close\nContent-Length: $post_size\n\n".$post_string."\n\nquit\n\n";
-			print $sock "$request";
-			# Send the faulty drive!
-			#print $sock "GET /~sentry/cgi-bin/ioerrors.pl?hdd=$_[0]\n\n";
-			my @replay = <$sock>;
-			logger("IOreply: @replay") if ($debug);
-			close $sock;
-		} else {
-			logger "Unable to connect to report IO error: $!";
-		}
-		open IOERR, '>', $ioerrfile or logger('Unable to log I/O Error');
-		print IOERR strftime('%b %d %H:%M:%S', localtime(time)) . " $_[0]\n";
-		close IOERR;
-		alarm 0;
-	};
-}
-
 sub firewall_update {
 	my %own_rules = ();
 	eval {
@@ -409,7 +389,7 @@ sub firewall_update {
 			}
 			close $sock;
 			while (my $ip = each (%own_rules)) {
-				logger("Allowed IPs hash entry $ip") if ($debug);
+				logger("Allowed IPs hash entry $ip") if ($debug); 
 			}
 		} else {
 			logger("Unable to get our allowed hosts list: $!");
@@ -418,7 +398,6 @@ sub firewall_update {
     };
 	return %own_rules;
 }
-
 
 %allowed_ips = firewall_update();
 
@@ -448,7 +427,7 @@ while (<LOGS>) {
 				$possible_attackers{$pop3[8]}[1] = $pop3[6];
 				logger("Possible attacker ".$possible_attackers{$pop3[8]}[0]." attempts with different usernames from ip ".$pop3[8]) if ($debug);
 			} else {
-				$possible_attackers{$pop3[8]} = [ $pop3[$failed_entry], $pop3[6], 'pop3' ];
+				$possible_attackers{$pop3[8]} = [ $pop3[$failed_entry], $pop3[6], 2 ];
 				logger("Possible attacker first attempt from ip ".$pop3[8]) if ($debug);
 			}
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
@@ -486,7 +465,7 @@ while (<LOGS>) {
 				$possible_attackers{$imap[8]}[1] = $imap[6];
 				logger("Possible attacker ".$possible_attackers{$imap[8]}[0]." attempts from ip ".$imap[8]) if ($debug);
 			} else {
-				$possible_attackers{$imap[8]} = [ $imap[$failed_entry], $imap[6], 'imap' ];
+				$possible_attackers{$imap[8]} = [ $imap[$failed_entry], $imap[6], 3 ];
 				logger("Possible attacker first attempt from ip ".$imap[8]) if ($debug);
 			}
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
@@ -500,118 +479,151 @@ while (<LOGS>) {
 		}
 	} elsif ( $_ =~ /I\/O error/i ) { 
 		# Feb 14 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
-		if ($io_first) {
-			if ((time() - $io_notified) < 900) {
-				logger("IO error detected but have been already notified during the last 15 mins ... skipping the notice");
-				next;
-			}
-		}
+		my $io_time_now = time();
+		next if (($io_time_now - $io_last_notified) < 900 && $io_already_notified == 1);
 		my @line = split /\s+/, $_;
-		my $pid = fork();
-		defined $pid or logger("Resources not avilable. Unable to fork checker.");
-		setsid;
-		if ($pid == 0) {
-			# this is the child
-			$0="sending_hdd_fault_on-".$line[9];
-			&send_fault($line[9]);
-			exit 0;
-		}
-		$io_first = 1 if ($io_first != 1);
-		$io_notified = time();
+		logger("IO error detected: $_") if ($debug);
+		post_a_note(1, $line[9], "", "", "$_");
+		$io_already_notified = 1 if ($io_already_notified  == 0); 
+		$io_last_notified = $io_time_now;
  	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
-		chomp($_);
-		next if ($_ =~ /input_userauth_request:/ );
 		my $ip = '';
 		my $user = '';
-		my $message = $_;
 		my $ssh_issue = 0;
-		my $action = 0;
-		if ( $_ =~ /Failed password for/ || $_ =~ /Failed none for/ || $_ =~ /authentication failure/ || $_ =~ /Invalid user/ || $_ =~ /Connection closed by/ ) {
+		my $action = 0; #Action 1 means bruteforce note + store_to_db | Action 2 means unauthorized access note only
+		if ($_ =~ /Failed \w \w/ ||
+			$_ =~ /authentication failure/ ||
+			$_ =~ /Invalid user/i ||
+			$_ =~ /Connection closed by/ ||
+			$_ =~ /Bad protocol/) {
+			# After if starts here :)
 			my @sshd = split /\s+/, $_;
+			$ssh_issue = 1;
 			if ( $sshd[8] =~ /invalid/ ) {
 				#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
 				#May 19 22:54:19 serv01 sshd[21552]: Failed none for invalid user supprot from 194.204.32.101 port 20943 ssh2
 				$sshd[12] =~ s/::ffff://;
 				$ip = $sshd[12];
 				$user = $sshd[10];
-				$ssh_issue = 1;
-				logger("sshd: Incorrect V1 $user $ip $message") if ($debug);
+				logger("sshd: Incorrect V1 $user $ip") if ($debug);
 			} elsif ( $sshd[5] =~ /Connection/ ) {
 				#May 25 02:11:34 serv01 sshd[10146]: Connection closed by 87.118.135.130
 				$sshd[8] =~ s/::ffff://;
 				$ip = $sshd[8];
 				$user = 'none';
-				$ssh_issue = 1;
-				logger("sshd: Incorrect KEY $user $ip $message") if ($debug);
+				logger("sshd: Incorrect KEY $user $ip") if ($debug);
 			} elsif ( $sshd[5] =~ /Invalid/) {
 				#May 19 22:54:19 serv01 sshd[21552]: Invalid user supprot from 194.204.32.101
 				$sshd[9] =~ s/::ffff://;
 				$ip = $sshd[9];
 				$user = $sshd[7];
-				$ssh_issue = 1;
-				logger("sshd: Incorrect V2 $user $ip $message") if ($debug);
+				logger("sshd: Incorrect V2 $user $ip") if ($debug);
 			} elsif ( $sshd[5] =~ /pam_unix\(sshd:auth\)/ ) {
 				#May 15 09:39:10 serv01 sshd[9474]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=194.204.32.101  user=root
 				$sshd[13] =~ s/::ffff://;
 				$sshd[13] =~ s/rhost=//;
 				$ip = $sshd[13];
 				$user = $sshd[14];
-				$ssh_issue = 1;
-				logger("sshd: Incorrect PAM $user $ip $message") if ($debug);
-				# TODO !!! ADD TEST CASES FOR THE FOLLOWING
-				#Jun  8 09:29:24 serv01 sshd[779]: Connection from 83.148.93.162 port 1454
-				#Jun  8 09:29:25 serv01 sshd[779]: User sentry not allowed because account is locked
+				logger("sshd: Incorrect PAM $user $ip") if ($debug);
+			} elsif ( $sshd[5] =~ /Bad/ ) {
+				#May 15 09:33:45 serv01 sshd[29645]: Bad protocol version identification '0penssh-portable-com' from 194.204.32.101
+				my @sshd = split /\s+/, $_;
+				$sshd[11] =~ s/::ffff://;
+				$ip = $sshd[11];
+				$user = 'none';
+				logger("sshd: Grabber $user $ip") if ($debug);
 			} else {
 				#May 15 09:39:12 serv01 sshd[9474]: Failed password for root from 194.204.32.101 port 17326 ssh2
 				#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
 				$sshd[10] =~ s/::ffff://;
 				$ip = $sshd[10];
 				$user = $sshd[8];
-				$ssh_issue = 1;
-				logger("sshd: Incorrect V3 $user $ip $message") if ($debug);
+				logger("sshd: Incorrect V3 $user $ip") if ($debug);
 			}
-			$action = 1 if ($ssh_issue);
-		} elsif ( $_ =~ /Accepted publickey/ || $_ =~ /Accepted password/ || $_ =~ /Postponed publickey for/) {
+		} elsif ($_ =~ /Accepted publickey for/ || $_ =~ /Accepted password for/ || $_ =~ /Postponed publickey for/) {
+			logger("It seems that someone logged in? $_") if ($debug);
 			#May 25 00:48:58 serv01 sshd[16015]: Accepted publickey for root from 75.125.60.5 port 32863 ssh2
 			#May 20 00:51:54 serv01 sshd[20568]: Accepted password for support from ::ffff:67.15.245.5 port 50336 ssh2
-			#May 20 01:14:46 serv01 sshd[17692]: Accepted password for support from ::ffff:67.15.245.5 port 59698 ssh2
+			#Jun  8 17:13:39 serv01 sshd[4474]: Postponed publickey for root from 77.70.33.151 port 35098 ssh2
+			my %protected_users = (
+				'root' => '0',
+				'support' => '0',
+				'bin' => '1',
+				'daemon' => '1',
+				'adm' => '1',
+				'lp' => '1',
+				'sync' => '1',
+				'shutdown' => '1',
+				'halt' => '1',
+				'mail' => '1',
+				'news' => '1',
+				'uucp' => '1',
+				'operator' => '1',
+				'games' => '1',
+				'gopher' => '1',
+				'ftp' => '1',
+				'nobody' => '1',
+				'dbus' => '1',
+				'vcsa' => '1',
+				'rpm' => '1',
+				'haldaemon' => '1',
+				'netdump' => '1',
+				'nscd' => '1',
+				'sshd' => '1',
+				'rpc' => '1',
+				'rpcuser' => '1',
+				'nfsnobody' => '1',
+				'mailnull' => '1',
+				'smmsp' => '1',
+				'pcap' => '1',
+				'apache' => '1',
+				'xfs' => '1',
+				'ntp' => '1',
+				'pegasus' => '1',
+				'named' => '1',
+				'admin' => '1',
+				'exim' => '1',
+				'mysql' => '1',
+				'mailman' => '1',
+				'cpanel' => '1',
+				'postgres' => '1',
+				'cpanel-horde' => '1',
+				'cpanel-phpmyadmin' => '1',
+				'cpanel-phppgadmin' => '1',
+				'sentry' => '1',
+				'backup' => '1'
+			);
 			my @sshd = split /\s+/, $_;
 			$sshd[10] =~ s/::ffff://;
 			$ip = $sshd[10];
 			$user = $sshd[8];
-			$ssh_issue = 1;
-			$action = 2;
-			logger("sshd: Login $user $ip $message") if ($debug);
-		} elsif ( $_=~ /Bad protocol version identification/ ) {
-			#May 15 09:33:45 serv01 sshd[29645]: Bad protocol version identification '0penssh-portable-com' from 194.204.32.101
-			my @sshd = split /\s+/, $_;
-			$sshd[11] =~ s/::ffff://;
-			$ip = $sshd[11];
-			$user = 'none';
-			$ssh_issue = 1;
-			$action = 2;
-			logger("sshd: Grabber $user $ip $message") if ($debug);
-		}
+			my $mask = $ip;
+			$mask =~ s/\.[0-9]{1,3}$/\.0/;
 
-		if ($ssh_issue) {
-			$message =~ s/\'//g;
-			if ($action == 1) {
-				next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/ );	# this is the local server
-				notify_hack("BRUTEFORCE||sshd||$ip||$message");
-				# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
-				store_to_db(0, $ip, 1, $user);
-				if ( exists $ssh_faults {$ip} ) {
-					$ssh_faults{$ip}++;
-				} else {
-					$ssh_faults{$ip} = 1;
-				}
-			} elsif ($action == 2) {
-				notify_hack("UNAUTHORIZED||sshd||$ip||$message");
-			} else {
-				logger("sshd: Unknown action on sshd issue!");
-			}
+			logger("The mask is now $mask") if ($debug);
+
+			next if (!exists $protected_users{$user});
+			next if ((defined($allowed_ips{$ip}) || defined($allowed_ips{$mask})) && $protected_users{$user} == 0);
+			$ssh_issue = 2;
+			logger("sshd: Login $user $ip") if ($debug);
 		} else {
-			logger("sshd: Unknown case verbose: $message");
+			logger("Did not found any matches for $_") if ($debug);
+			next;
+		} 
+
+		$_ =~ s/\'//g;
+		if ($ssh_issue == 1) {
+			next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/ );	# this is the local server
+			post_a_note(2, "BRUTEFORCE", 1, $ip, $_);
+			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
+			store_to_db(0, $ip, 1, $user);
+			if ( exists $ssh_faults {$ip} ) {
+				$ssh_faults{$ip}++;
+			} else {
+				$ssh_faults{$ip} = 1;
+			}
+		} elsif ($ssh_issue == 2) {
+			post_a_note(2, "UNAUTHORIZED", 1, $ip, $_);
 		}
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
 		# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
@@ -626,7 +638,7 @@ while (<LOGS>) {
 			$possible_attackers{$ftp[5]}[1] = $ftp[11];
 			logger("Possible attacker ".$possible_attackers{$ftp[5]}[0]." attempts with different usernames from ip ".$ftp[5]) if ($debug);
 		} else {
-			$possible_attackers{$ftp[5]} = [ 0, $ftp[11], 'ftp' ];
+			$possible_attackers{$ftp[5]} = [ 0, $ftp[11], 0 ];
 			logger("Possible attacker first attempt with different usernames from ip ".$ftp[5]) if ($debug);
 		}
 		if ( exists $ftp_faults {$ftp[5]} ) {
