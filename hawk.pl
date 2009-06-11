@@ -491,6 +491,7 @@ while (<LOGS>) {
 		my $user = '';
 		my $ssh_issue = 0;
 		my $action = 0; #Action 1 means bruteforce note + store_to_db | Action 2 means unauthorized access note only
+		# DA POMISLIM NAD TOVA Jun 11 02:40:11 serv01 sshd[1826]: Connection from 82.67.144.115 port 51983
 		if ($_ =~ /Failed \w \w/ ||
 			$_ =~ /authentication failure/ ||
 			$_ =~ /Invalid user/i ||

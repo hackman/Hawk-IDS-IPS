@@ -1,51 +1,33 @@
 #!/usr/bin/perl -T
+
 use strict;
 use warnings;
+
 use DBD::Pg;
 use CGI qw(param);
 use CGI::Carp qw(fatalsToBrowser);
 use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 use File::Basename;
 
+require "/home/sentry/hackman/cpustats/modules/parse_config.pm";
+
+import parse_config;
+
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '0.99';		# version string
+my $version = '1.00';		# version string
 
 my $conf = '/home/sentry/hackman/hawk-web.conf';
 # make DB vars
 my $html	= '';
-my %config;
+my %config = parse_config($conf);
+
 # changing to unbuffered output
 our $| = 1;
 sub web_error {
 	print $_[0], "\n";
 	exit 1;
 }
-# parse the configuration file $conf into the hash %config
-sub parse_conf {
-	my %hash;
-	die "No config defined!\n" if !defined($_[0]);
-	open CONF, '<', $_[0] or die "Unable to open $_[0]: $!\n";
-	while (<CONF>) {
-		if ($_ =~ /^#/ or $_ =~ /^[\s]*$/) {
-			# if this is a comment
-			# or blank line
-			# skip to next line
-			next;
-		} else {
-			# clean unwanted chars
-			$_ =~ s/[\r|\n]$//;
-			$_ =~ s/([\s]*=[\s]*){1}/=/;
-			my $key = my $val = $_;
-			$key =~ s/=.*//;
-			$val =~ s/.*?=//;
-			$hash{$key} = $val;
-		}
-	}
-	close CONF;
-	return %hash;
-}
-%config = parse_conf($conf);
 
 sub get_template {
         my $out='';
@@ -87,33 +69,44 @@ sub build_graph {
 	return $graph;
 }
 
+#Service codes
+#	0 = ftp
+#	1 = ssh
+#	2 = pop3
+#	3 = imap
+#	4 = webmail
+#	5 = cpanel
+
 sub get_service_num {
-	if ($_[0] eq 'pop3') {
+	if ($_[0] eq 'ftp') {
 		return '0';
-	} elsif ($_[0] eq 'imap') {
-		return '1';
-	} elsif ($_[0] eq 'ftp') {
-		return '2';
 	} elsif ($_[0] eq 'ssh') {
+		return '1';
+	} elsif ($_[0] eq 'pop3') {
+		return '2';
+	} elsif ($_[0] eq 'imap') {
 		return '3';
-	} elsif ($_[0] =~  /cpanel/i) {
+	} elsif ($_[0] eq 'webmail') {
 		return 4;
+	} elsif ($_[0] eq 'cpanel'){
+		return 5;
 	}
 }
 sub get_num_service {
 	if ($_[0] == 0) {
-		return 'pop3';
-	} elsif ($_[0] == 1) {
-		return 'imap';
-	} elsif ($_[0] == 2) {
 		return 'ftp';
-	} elsif ($_[0] == 3) {
+	} elsif ($_[0] == 1) {
 		return 'ssh';
+	} elsif ($_[0] == 2) {
+		return 'pop3';
+	} elsif ($_[0] == 3) {
+		return 'imap';
 	} elsif ($_[0] == 4) {
+		return 'webmail';
+	} elsif ($_[0] == 5) {
 		return 'cpanel';
 	}
 }
-
 
 print "Content-type: text/html\r\n\r\n";
 
@@ -244,7 +237,7 @@ if ($action eq 'listfailed') {
 				$line =~ s/__DATE__/$str[0]/;
 				$line =~ s/__IP__/$str[1]/g;
 				$line =~ s/__USER__/$str[2]/g;
-				$line =~ s/__SERVICE__/$str[3]/;
+				$line =~ s/__SERVICE__/get_num_service($str[3])/e;
 				print $line;
 			}
 			print '</table>';
@@ -314,7 +307,7 @@ if ($action eq 'listfailed') {
 	print '</table>';
 } elsif ($action eq 'stat') {
 	my $query ='';
-	if (	defined(param('w')) && 
+	if (defined(param('w')) && 
 		defined(param('ss')) && 
 		param('w') eq 'sv' && 
 		param('ss') =~ /^[0-9]+$/ ) {
@@ -462,16 +455,20 @@ function sort(val) {
 		my $brutes7 = $conn->prepare("
 			SELECT DISTINCT ip FROM broots
 			WHERE date > (now() - interval '7 day') ORDER BY ip");
+
   		my $ftp = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
- 			WHERE service = \'ftp\' AND date > (now() - interval \'1 hour\')');
+ 			WHERE service = \'0\' AND date > (now() - interval \'1 hour\')');
  		my $ssh = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
- 			WHERE service = \'ssh\' AND date > (now() - interval \'1 hour\')');
+ 			WHERE service = \'1\' AND date > (now() - interval \'1 hour\')');
 		my $pop3 = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'pop3\' AND date > (now() - interval \'1 hour\')');
+			WHERE service = \'2\' AND date > (now() - interval \'1 hour\')');
 		my $imap = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'imap\' AND date > (now() - interval \'1 hour\')');
+			WHERE service = \'3\' AND date > (now() - interval \'1 hour\')');
+		my $webmail = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log
+			WHERE service = \'4\' AND date > (now() - interval \'1 hour\')');
 		my $cpanel = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'cpanel\' AND date > (now() - interval \'1 hour\')');
+			WHERE service = \'5\' AND date > (now() - interval \'1 hour\')');
+
 		$html .= get_template('summary');
 
 		my $i=2;
