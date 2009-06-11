@@ -285,14 +285,15 @@ if ($action eq 'listfailed') {
 		defined(param('ss')) && 
 		param('w') eq 'sv' && 
 		param('ss') =~ /^[0-9]+$/ ) {
-		my $service = get_num_service(param('ss'));
-		web_error('Unknown service') if !defined($service);
+		my $service_name = get_num_service(param('ss'));
+		my $service_id = param('ss');
+		web_error('Unknown service') if !defined($service_name);
 		my $sort = 'count';
 		if (defined(param('sort'))) {
 			$sort = 'ip' if param('sort') == 0;
 		}
- 		my $query1 = "SELECT ip,COUNT(ip) AS count FROM failed_log WHERE \"service\" ~ '$service' AND \"date\" > (now() - interval '1 hour') GROUP BY ip ORDER BY $sort DESC";
- 		my $query24 = "SELECT ip,COUNT(ip) AS count FROM failed_log WHERE \"service\" ~ '$service' AND \"date\" > (now() - interval '24 hour') GROUP BY ip ORDER BY $sort DESC";
+ 		my $query1 = "SELECT ip,COUNT(ip) AS count FROM failed_log WHERE \"service\" = '$service_id' AND \"date\" > (now() - interval '1 hour') GROUP BY ip ORDER BY $sort DESC";
+ 		my $query24 = "SELECT ip,COUNT(ip) AS count FROM failed_log WHERE \"service\" = '$service_id' AND \"date\" > (now() - interval '24 hour') GROUP BY ip ORDER BY $sort DESC";
 		my $get_info1 = $conn->prepare($query1) or web_error("Unable to prepare query: $DBI::errstr");
 		my $get_info24 = $conn->prepare($query24) or web_error("Unable to prepare query: $DBI::errstr");
 		$get_info1->execute() or web_error("Unable to execute query: $DBI::errstr");
@@ -316,7 +317,7 @@ function sort(val) {
 <td class='td-top'><a href='javascript: sort(1)'><b>Failed count</a></td>
 </tr>\n";
 		print $script;
-		printf $table, $service, 'hour';
+		printf $table, $service_name, 'hour';
 		my $lines='';
 		my $line0 = "<tr><td class='td0'><a href='?action=search&w=ip&addr=__IP__'>__IP__</a></td><td class='td0'>__COUNT__</td></tr>\n";
 		while ( my @str =  $get_info1->fetchrow_array) {
@@ -327,7 +328,7 @@ function sort(val) {
 		}
 		print '</table>';
 		$get_info1->execute() or web_error("Unable to execute query: $DBI::errstr");
-		printf $table, $service, 'day';
+		printf $table, $service_name, 'day';
 		while ( my @str =  $get_info24->fetchrow_array) {
 			my $line = $line0;		
 			$line =~ s/__IP__/$str[0]/;
@@ -342,7 +343,7 @@ function sort(val) {
 } else {
 	my $lines = '';
 	my $line0 = "<tr><td>__DATE__</td><td>__COUNT__</td></tr>\n";
-	my $line1 = "<tr><td>__SSH__</td><td>__FTP__</td><td>__POP3__</td><td>__IMAP__</td><td>__CPANEL__</td></tr>\n";
+	my $line1 = "<tr><td>MYFTP</td><td>MYSSH</td><td>MYPOP3</td><td>MYIMAP</td><td>MYWEBMAIL</td><td>MYCPANEL</td></tr>\n";
 	my $line2 = "<tr><td><a href=\"?action=search\&w=ip\&addr=__IP__\">__IP__</a></td></tr>\n";
 
 	# last 1 hour
@@ -430,18 +431,18 @@ function sort(val) {
 			SELECT DISTINCT ip FROM broots
 			WHERE date > (now() - interval '7 day') ORDER BY ip");
 
-  		my $ftp = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
- 			WHERE service = \'0\' AND date > (now() - interval \'1 hour\')');
- 		my $ssh = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
- 			WHERE service = \'1\' AND date > (now() - interval \'1 hour\')');
-		my $pop3 = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'2\' AND date > (now() - interval \'1 hour\')');
-		my $imap = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'3\' AND date > (now() - interval \'1 hour\')');
-		my $webmail = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log
-			WHERE service = \'4\' AND date > (now() - interval \'1 hour\')');
-		my $cpanel = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-			WHERE service = \'5\' AND date > (now() - interval \'1 hour\')');
+  		#my $ftp = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
+ 		#	WHERE service = \'0\' AND date > (now() - interval \'1 hour\')');
+ 		#my $ssh = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
+ 		#	WHERE service = \'1\' AND date > (now() - interval \'1 hour\')');
+		#my $pop3 = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
+		#	WHERE service = \'2\' AND date > (now() - interval \'1 hour\')');
+		#my $imap = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
+		#	WHERE service = \'3\' AND date > (now() - interval \'1 hour\')');
+		#my $webmail = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log
+		#	WHERE service = \'4\' AND date > (now() - interval \'1 hour\')');
+		#my $cpanel = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
+		#	WHERE service = \'5\' AND date > (now() - interval \'1 hour\')');
 
 		$html .= get_template('summary');
 
@@ -517,15 +518,18 @@ function sort(val) {
 		$html =~ s/__TABLE6__/$lines_2/;
 		$html =~ s/__TABLE7__/$lines_3/;
 		foreach my $service_key_name (keys %service_codes)  {
-			chomp($service_key_name);
 			$html =~ s/MY$service_key_name/$service_codes{$service_key_name}/ige;
+			my $failed_login_count = $conn->selectrow_array("SELECT COUNT(id) FROM failed_log 
+	            WHERE service = '$service_codes{$service_key_name}' AND date > (now() - interval '1 hour')");
+			$line1 =~ s/MY$service_key_name/$failed_login_count/i;
 		}		
 
-		$line1 =~ s/__FTP__/$ftp/;
-		$line1 =~ s/__SSH__/$ssh/;
-		$line1 =~ s/__POP3__/$pop3/;
-		$line1 =~ s/__IMAP__/$imap/;
-		$line1 =~ s/__CPANEL__/$cpanel/;
+		#$line1 =~ s/__FTP__/$ftp/;
+		#$line1 =~ s/__SSH__/$ssh/;
+		#$line1 =~ s/__POP3__/$pop3/;
+		#$line1 =~ s/__IMAP__/$imap/;
+		#$line1 =~ s/__CPANEL__/$cpanel/;
+
 		$html =~ s/__TABLE2__/$line1/;
 		
 		$lines = '';
