@@ -21,6 +21,8 @@ my $conf = '/home/sentry/hackman/hawk-web.conf';
 # make DB vars
 my $html	= '';
 my %config = parse_config($conf);
+my %service_codes = split(/[:\s]/, $config{'service_ids'});
+my %service_names = split(/[:\s]/, $config{'service_names'});
 
 # changing to unbuffered output
 our $| = 1;
@@ -69,43 +71,15 @@ sub build_graph {
 	return $graph;
 }
 
-#Service codes
-#	0 = ftp
-#	1 = ssh
-#	2 = pop3
-#	3 = imap
-#	4 = webmail
-#	5 = cpanel
-
+#service_ids=ftp:0 ssh:1 pop3:2 imap:3 webmail:4 cpanel:5
 sub get_service_num {
-	if ($_[0] eq 'ftp') {
-		return '0';
-	} elsif ($_[0] eq 'ssh') {
-		return '1';
-	} elsif ($_[0] eq 'pop3') {
-		return '2';
-	} elsif ($_[0] eq 'imap') {
-		return '3';
-	} elsif ($_[0] eq 'webmail') {
-		return 4;
-	} elsif ($_[0] eq 'cpanel'){
-		return 5;
-	}
+	return $service_codes{$_[0]} if (defined($service_codes{$_[0]}));
+	#return "Unknown service name $_[0]";
 }
+#service_names=0:ftp 1:ssh 2:pop3 3:imap 4:webmail 5:cpanel
 sub get_num_service {
-	if ($_[0] == 0) {
-		return 'ftp';
-	} elsif ($_[0] == 1) {
-		return 'ssh';
-	} elsif ($_[0] == 2) {
-		return 'pop3';
-	} elsif ($_[0] == 3) {
-		return 'imap';
-	} elsif ($_[0] == 4) {
-		return 'webmail';
-	} elsif ($_[0] == 5) {
-		return 'cpanel';
-	}
+	return $service_names{$_[0]} if (defined($service_names{$_[0]}));
+	#return "Unknown service code $_[0]";
 }
 
 print "Content-type: text/html\r\n\r\n";
@@ -142,11 +116,11 @@ if ($action eq 'listfailed') {
 	$get_failed->execute;
 	while (my ($date,$ip,$service,$user) = $get_failed->fetchrow_array) {
 		my $line = $line0;
-		my $service_num = get_service_num($service);
+		my $service_name = get_num_service($service);
 		$user =~ s/[\<\>]/_/g;
 		$line =~ s/__DATE__/$date/;		
 		$line =~ s/__IP__/$ip/g;		
-		$line =~ s/__SERVICE__/$service_num\'>$service/;
+		$line =~ s/__SERVICE__/$service\'>$service_name/;
 		$line =~ s/__USER__/$user/g;
 		$lines .= $line;
 	}
@@ -542,7 +516,10 @@ function sort(val) {
 		$html =~ s/__GRAPH1__/$graph1/ig;
 		$html =~ s/__TABLE6__/$lines_2/;
 		$html =~ s/__TABLE7__/$lines_3/;
-		
+		foreach my $service_key_name (keys %service_codes)  {
+			chomp($service_key_name);
+			$html =~ s/MY$service_key_name/$service_codes{$service_key_name}/ige;
+		}		
 
 		$line1 =~ s/__FTP__/$ftp/;
 		$line1 =~ s/__SSH__/$ssh/;

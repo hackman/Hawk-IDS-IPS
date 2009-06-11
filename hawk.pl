@@ -52,6 +52,7 @@ my $pop_time = $start_time;
 my $fw_time = $start_time;
 my $myip = get_ip();
 my $hostname = '';
+my %service_codes = split(/[:\s]/, $config{'service_ids'});
 
 # check for debug
 if (defined($ARGV[0])) {
@@ -427,7 +428,7 @@ while (<LOGS>) {
 				$possible_attackers{$pop3[8]}[1] = $pop3[6];
 				logger("Possible attacker ".$possible_attackers{$pop3[8]}[0]." attempts with different usernames from ip ".$pop3[8]) if ($debug);
 			} else {
-				$possible_attackers{$pop3[8]} = [ $pop3[$failed_entry], $pop3[6], 2 ];
+				$possible_attackers{$pop3[8]} = [ $pop3[$failed_entry], $pop3[6], $service_codes{'pop3'} ];
 				logger("Possible attacker first attempt from ip ".$pop3[8]) if ($debug);
 			}
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
@@ -465,7 +466,7 @@ while (<LOGS>) {
 				$possible_attackers{$imap[8]}[1] = $imap[6];
 				logger("Possible attacker ".$possible_attackers{$imap[8]}[0]." attempts from ip ".$imap[8]) if ($debug);
 			} else {
-				$possible_attackers{$imap[8]} = [ $imap[$failed_entry], $imap[6], 3 ];
+				$possible_attackers{$imap[8]} = [ $imap[$failed_entry], $imap[6], $service_codes{'imap'} ];
 				logger("Possible attacker first attempt from ip ".$imap[8]) if ($debug);
 			}
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
@@ -489,8 +490,7 @@ while (<LOGS>) {
  	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
 		my $ip = '';
 		my $user = '';
-		my $ssh_issue = 0;
-		my $action = 0; #Action 1 means bruteforce note + store_to_db | Action 2 means unauthorized access note only
+		my $ssh_issue = 0; #sshd issue is bruteforce which will be stored to the db and notified to the monitoring if 1. if 2 we only send a notification.
 		# DA POMISLIM NAD TOVA Jun 11 02:40:11 serv01 sshd[1826]: Connection from 82.67.144.115 port 51983
 		if ($_ =~ /Failed \w \w/ ||
 			$_ =~ /authentication failure/ ||
@@ -548,51 +548,7 @@ while (<LOGS>) {
 			#Jun  8 17:13:39 serv01 sshd[4474]: Postponed publickey for root from 77.70.33.151 port 35098 ssh2
 			my %protected_users = (
 				'root' => '0',
-				'support' => '0',
-				'bin' => '1',
-				'daemon' => '1',
-				'adm' => '1',
-				'lp' => '1',
-				'sync' => '1',
-				'shutdown' => '1',
-				'halt' => '1',
-				'mail' => '1',
-				'news' => '1',
-				'uucp' => '1',
-				'operator' => '1',
-				'games' => '1',
-				'gopher' => '1',
-				'ftp' => '1',
-				'nobody' => '1',
-				'dbus' => '1',
-				'vcsa' => '1',
-				'rpm' => '1',
-				'haldaemon' => '1',
-				'netdump' => '1',
-				'nscd' => '1',
-				'sshd' => '1',
-				'rpc' => '1',
-				'rpcuser' => '1',
-				'nfsnobody' => '1',
-				'mailnull' => '1',
-				'smmsp' => '1',
-				'pcap' => '1',
-				'apache' => '1',
-				'xfs' => '1',
-				'ntp' => '1',
-				'pegasus' => '1',
-				'named' => '1',
-				'admin' => '1',
-				'exim' => '1',
-				'mysql' => '1',
-				'mailman' => '1',
-				'cpanel' => '1',
-				'postgres' => '1',
-				'cpanel-horde' => '1',
-				'cpanel-phpmyadmin' => '1',
-				'cpanel-phppgadmin' => '1',
-				'sentry' => '1',
-				'backup' => '1'
+				'support' => '0'
 			);
 			my @sshd = split /\s+/, $_;
 			$sshd[10] =~ s/::ffff://;
@@ -615,7 +571,7 @@ while (<LOGS>) {
 		$_ =~ s/\'//g;
 		if ($ssh_issue == 1) {
 			next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/ );	# this is the local server
-			post_a_note(2, "BRUTEFORCE", 1, $ip, $_);
+			post_a_note(2, "BRUTEFORCE", $service_codes{'ssh'}, $ip, $_);
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 			store_to_db(0, $ip, 1, $user);
 			if ( exists $ssh_faults {$ip} ) {
@@ -624,7 +580,7 @@ while (<LOGS>) {
 				$ssh_faults{$ip} = 1;
 			}
 		} elsif ($ssh_issue == 2) {
-			post_a_note(2, "UNAUTHORIZED", 1, $ip, $_);
+			post_a_note(2, "UNAUTHORIZED", $service_codes{'ssh'}, $ip, $_);
 		}
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
 		# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
@@ -639,7 +595,7 @@ while (<LOGS>) {
 			$possible_attackers{$ftp[5]}[1] = $ftp[11];
 			logger("Possible attacker ".$possible_attackers{$ftp[5]}[0]." attempts with different usernames from ip ".$ftp[5]) if ($debug);
 		} else {
-			$possible_attackers{$ftp[5]} = [ 0, $ftp[11], 0 ];
+			$possible_attackers{$ftp[5]} = [ 0, $ftp[11], $service_codes{'ftp'} ];
 			logger("Possible attacker first attempt with different usernames from ip ".$ftp[5]) if ($debug);
 		}
 		if ( exists $ftp_faults {$ftp[5]} ) {
@@ -652,8 +608,8 @@ while (<LOGS>) {
 		#209.62.36.16 - webmail.siteground216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
 		#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
 		my @cpanel = split /\s+/;
-		my $service = 4;
-		$service = 5 if ($cpanel[10] eq 'cpaneld:');
+		my $service = $service_codes{'webmail'};
+		$service = $service_codes{'cpanel'} if ($cpanel[10] eq 'cpaneld:');
 		$cpanel[2] = '' if $cpanel[2] =~ /\[/;
 		# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 		store_to_db(0, $cpanel[0], $service, $cpanel[2]);
