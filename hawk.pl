@@ -207,7 +207,7 @@ sub check_broot {
 		notify('ftp', $k, $ftp_faults{$k}) if ( $v > $max_attempts );
 	}
 	while ( my ($k,$v) = each (%possible_attackers) ) {
-		if ( $possible_attackers{$k}[0] > 5 ) {
+		if ( $possible_attackers{$k}[0] > 10 ) {
 			if (defined($possible_attackers{$k}[3])) {
 				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
 					$possible_attackers{$k}[3] = 6;
@@ -571,13 +571,24 @@ while (<LOGS>) {
 		$_ =~ s/\'//g;
 		if ($ssh_issue == 1) {
 			next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/ );	# this is the local server
-			post_a_note(2, "BRUTEFORCE", $service_codes{'ssh'}, $ip, $_);
+			#post_a_note(2, "BRUTEFORCE", $service_codes{'ssh'}, $ip, $_);
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
+			# Store the bastard to the database
 			store_to_db(0, $ip, 1, $user);
+			# Increase the attempts
 			if ( exists $ssh_faults {$ip} ) {
 				$ssh_faults{$ip}++;
 			} else {
 				$ssh_faults{$ip} = 1;
+			}
+			# Mark it as possible attacker for the notices system!
+			if (exists $possible_attackers{$ip}) {
+				$possible_attackers{$ip}[0]++;
+				$possible_attackers{$ip}[1] = $user;
+				logger("Possible attacker ".$possible_attackers{$ip}[0]." attempts with different usernames from ip ".$ip) if ($debug);
+			} else {
+				$possible_attackers{$ip} = [ 1, $user, $service_codes{'ssh'} ];
+				logger("Possible attacker first attempt from ip ".$ip) if ($debug);
 			}
 		} elsif ($ssh_issue == 2) {
 			post_a_note(2, "UNAUTHORIZED", $service_codes{'ssh'}, $ip, $_);
