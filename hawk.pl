@@ -5,13 +5,16 @@ use warnings;
 
 use DBD::mysql;
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
+
 require "/usr/local/sbin/parse_config.pm";
+require "/usr/local/sbin/post_a_note.pm";
 
 import parse_config;
+import post_a_note;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '1.20';	# version string
+my $version = '1.21';	# version string
 
 # defining fault hashes
 my %ssh_faults = ();		# ssh faults storage
@@ -211,10 +214,10 @@ sub check_broot {
 			if (defined($possible_attackers{$k}[3])) {
 				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
 					$possible_attackers{$k}[3] = 6;
-					post_a_note(2, "BRUTEFORCE", $possible_attackers{$k}[2], $k, $possible_attackers{$k}[0]);
+					post_notes(2, "BRUTEFORCE", $possible_attackers{$k}[2], $k, $possible_attackers{$k}[0]);
 				}
 			} else {
-				post_a_note(2, "BRUTEFORCE", $possible_attackers{$k}[2], $k, $possible_attackers{$k}[0]);
+				post_notes(2, "BRUTEFORCE", $possible_attackers{$k}[2], $k, $possible_attackers{$k}[0]);
 				$possible_attackers{$k}[3] = 1;
 			}
 		}
@@ -230,7 +233,7 @@ umask 0;
 # redirect standart file descriptors to /dev/null
 open STDIN, '<', '/dev/null' or die "DIE: Cannot read stdin: $! \n";
 open STDOUT, '>>', '/dev/null' or die "DIE: Cannot write to stdout: $! \n";
-if ($debug) {
+if (!$debug) {
 	open STDERR, '>>', "$logfile" or die "DIE: Cannot write to $logfile: $! \n";
 } else {
 	open STDERR, '>>', '/dev/null' or die "DIE: Cannot write to stderr: $! \n";
@@ -248,14 +251,30 @@ open LOGS, $log_list or die "DIE: Unable to open logs: $!\n";
 select((select(HAWK), $| = 1)[0]);
 select((select(LOGS), $| = 1)[0]);
 
-sub sigHup {
-	logger("sigHup detected! Are you my master?");
-	# Redefine the signals for further restarts!
-	$SIG{"HUP"} = \&sigHup;
-	$SIG{"CHLD"} = \&sigChld;
-	$SIG{__DIE__}  = sub { logger(@_); };
-	# Reload the hash with all ips allowed to ssh into the server
-	%allowed_ips = firewall_update();
+sub firewall_update {
+	my %own_rules = ();
+	eval {
+		local $SIG{ALRM} = sub { die 'alarm'; };
+		alarm 5;
+		use IO::Socket::INET;
+		if ( my $sock = new IO::Socket::INET ( PeerAddr => 'master.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3') ) {
+			# Send the faulty drive!
+			print $sock "GET /~sentry/cgi-bin/hawkup.cgi?server=$hostname\n\n";
+			while (<$sock>) {
+				chomp($_);
+				logger("Socket answer $_") if ($debug);
+				$own_rules{$_} = $_;
+			}
+			close $sock;
+			while (my $ip = each (%own_rules)) {
+				logger("Allowed IPs hash entry $ip") if ($debug); 
+			}
+		} else {
+			logger("Unable to get our allowed hosts list: $!");
+		}
+        alarm 0;
+    };
+	return %own_rules;
 }
 
 # Clean the zombie childs!
@@ -296,13 +315,15 @@ sub store_to_db {
 }
 
 # notifications to admins
-sub post_a_note {
+sub post_notes {
 	# $_[0] - NOTE TYPE - 1 hdd failure, 2 bruteforce attack
 	# $_[1] - Attack type - Bruteforce, Unauthorized access or drive name
 	# Used only for bruteforce
 	# $_[2] - Service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 	# $_[3] - ip
 	# $_[4] - the exact line which forced the note function
+
+	# Preparing the message that will be posted for the correct template
 	my $message = '';
 	if ($_[0] == 1) {
 		$message = "$_[1]||$_[4]";
@@ -312,30 +333,11 @@ sub post_a_note {
 		logger("Unknown template while calling post a note");
 		return;
 	}
-	#logger("We will use template $_[0] with message $message");
-	my $post_string = "sender=1&template=".$_[0]."&options=".$message;
-	$post_string = "sender=1&template=".$_[0]."&options=".$message."&debug=SGBUGDEBUG" if ($debug);
-	my $post_size = length($post_string);
-	my $request="POST /notes/postnote.cgi HTTP/1.1\nHost: notes.sgvps.net\nContent-Type: application/x-www-form-urlencoded\nConnection: close\nContent-Length: $post_size\n\n".$post_string."\n\nquit\n\n";
 
-	my $pid = fork();
-	defined $pid or logger("Resources not avilable. Unable to fork while trying to post note ".$_[0]);
-	setsid;
-	if ($pid == 0) {
-		$0="Sending-note-".$_[0];
-		eval {
-			local $SIG{ALRM} = sub { die 'alarm'; };
-			alarm 5;
-			use IO::Socket::INET;
-			my $sock = new IO::Socket::INET ( PeerAddr => 'notes.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3')
-				or logger "Unable to connect to report intruder error: $!";
-			print $sock "$request";
-			my @replay = <$sock>;
-			logger("Received reply: @replay") if ($debug);
-			close $sock;
-		};
-		alarm 0;
-		exit 0;
+	if (!$debug) {
+		post_a_note(1, $_[0], $message);
+	} else {
+		post_a_note(1, $_[0], $message,1);
 	}
 }
 
@@ -374,33 +376,40 @@ sub notify {
 	}
 }
 
-sub firewall_update {
-	my %own_rules = ();
-	eval {
-		local $SIG{ALRM} = sub { die 'alarm'; };
-		alarm 5;
-		use IO::Socket::INET;
-		if ( my $sock = new IO::Socket::INET ( PeerAddr => 'master.sgvps.net', PeerPort => '80', Proto => 'tcp', Timeout => '3') ) {
-			# Send the faulty drive!
-			print $sock "GET /~sentry/cgi-bin/hawkup.cgi?server=$hostname\n\n";
-			while (<$sock>) {
-				chomp($_);
-				logger("Socket answer $_") if ($debug);
-				$own_rules{$_} = $_;
-			}
-			close $sock;
-			while (my $ip = each (%own_rules)) {
-				logger("Allowed IPs hash entry $ip") if ($debug); 
-			}
-		} else {
-			logger("Unable to get our allowed hosts list: $!");
-		}
-        alarm 0;
-    };
-	return %own_rules;
+%allowed_ips = firewall_update();
+
+sub sigHup {
+	logger("sigHup detected! Are you my master?");
+	#close HAWK if (defined(<HAWK>));
+	#close STDIN if (defined(<STDIN>));
+	#close STDOUT if (defined(<STDOUT>));
+	#close STDERR if (defined(<STDERR>));
+	#close LOGS if (defined(<LOGS>));
+
+	#open HAWK, '>>', $logfile or die "DIE: Unable to open logfile $logfile: $!\n";
+	#logger("I am still alive as I was able to reopen my log :)");
+	#open STDIN, '<', '/dev/null' or die "DIE: Cannot read stdin: $! \n";
+	#open STDOUT, '>>', '/dev/null' or die "DIE: Cannot write to stdout: $! \n";
+	#if (!$debug) {
+	#	open STDERR, '>>', "$logfile" or die "DIE: Cannot write to $logfile: $! \n";
+	#} else {
+	#	open STDERR, '>>', '/dev/null' or die "DIE: Cannot write to stderr: $! \n";
+	#}
+	open LOGS, $log_list or die "DIE: Unable to open logs: $!\n";
+	# make the output unbuffered
+	#select((select(HAWK), $| = 1)[0]);
+	select((select(LOGS), $| = 1)[0]);
+
+	# Redefine the signals for further restarts!
+	$SIG{"HUP"} = \&sigHup;
+	$SIG{"CHLD"} = \&sigChld;
+	$SIG{__DIE__}  = sub { logger(@_); };
+	# Reload the hash with all ips allowed to ssh into the server
+	%allowed_ips = firewall_update();
+	logger("I am still alive as I was able to update the firewall list :)");
 }
 
-%allowed_ips = firewall_update();
+sub main {
 
 while (<LOGS>) {
 	# Dovecot IMAP & POP3
@@ -484,7 +493,7 @@ while (<LOGS>) {
 		next if (($io_time_now - $io_last_notified) < 900 && $io_already_notified == 1);
 		my @line = split /\s+/, $_;
 		logger("IO error detected: $_") if ($debug);
-		post_a_note(1, $line[9], "", "", "$_");
+		post_notes(1, $line[9], "", "", "$_");
 		$io_already_notified = 1 if ($io_already_notified  == 0); 
 		$io_last_notified = $io_time_now;
  	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
@@ -571,7 +580,7 @@ while (<LOGS>) {
 		$_ =~ s/\'//g;
 		if ($ssh_issue == 1) {
 			next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/ );	# this is the local server
-			#post_a_note(2, "BRUTEFORCE", $service_codes{'ssh'}, $ip, $_);
+			#post_notes(2, "BRUTEFORCE", $service_codes{'ssh'}, $ip, $_);
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 			# Store the bastard to the database
 			store_to_db(0, $ip, 1, $user);
@@ -591,7 +600,7 @@ while (<LOGS>) {
 				logger("Possible attacker first attempt from ip ".$ip) if ($debug);
 			}
 		} elsif ($ssh_issue == 2) {
-			post_a_note(2, "UNAUTHORIZED", $service_codes{'ssh'}, $ip, $_);
+			post_notes(2, "UNAUTHORIZED", $service_codes{'ssh'}, $ip, $_);
 		}
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
 		# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
@@ -653,10 +662,19 @@ while (<LOGS>) {
 		$fw_time = time();
 	}
 }
+}
 
+
+main();
+
+logger("Gone ...after the main loop");
 close LOGS;
-close HAWK;
+logger("Gone ...after we closed the logs");
 close STDIN;
+logger("Gone ...after we closed the stdin");
 close STDOUT;
+logger("Gone ...after we closed the stdout");
 close STDERR if (!$debug);
+logger("Gone ...after we closed the stderr");
+close HAWK;
 exit 0;
