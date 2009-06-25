@@ -51,6 +51,8 @@ my $dovecot = 1;
 my $start_time = time();
 my $io_last_notified = $start_time;
 my $io_already_notified = 0;
+my $mem_last_notified = $start_time;
+my $mem_already_notified = 0;
 my $pop_time = $start_time;
 my $fw_time = $start_time;
 my $myip = get_ip();
@@ -214,10 +216,10 @@ sub check_broot {
 			if (defined($possible_attackers{$k}[3])) {
 				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
 					$possible_attackers{$k}[3] = 6;
-					post_notes(2, "BRUTEFORCE", $possible_attackers{$k}[2], $k, $possible_attackers{$k}[0]);
+					post_a_note(1, 2, "BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
 				}
 			} else {
-				post_notes(2, "BRUTEFORCE", $possible_attackers{$k}[2], $k, $possible_attackers{$k}[0]);
+				post_a_note(1, 2, "BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
 				$possible_attackers{$k}[3] = 1;
 			}
 		}
@@ -314,33 +316,6 @@ sub store_to_db {
 	$conn->disconnect;
 }
 
-# notifications to admins
-sub post_notes {
-	# $_[0] - NOTE TYPE - 1 hdd failure, 2 bruteforce attack
-	# $_[1] - Attack type - Bruteforce, Unauthorized access or drive name
-	# Used only for bruteforce
-	# $_[2] - Service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
-	# $_[3] - ip
-	# $_[4] - the exact line which forced the note function
-
-	# Preparing the message that will be posted for the correct template
-	my $message = '';
-	if ($_[0] == 1) {
-		$message = "$_[1]||$_[4]";
-	} elsif ($_[0] == 2) {
-		$message = "$_[1]||$_[2]||$_[3]||$_[4]"
-	} else {
-		logger("Unknown template while calling post a note");
-		return;
-	}
-
-	if (!$debug) {
-		post_a_note(1, $_[0], $message);
-	} else {
-		post_a_note(1, $_[0], $message,1);
-	}
-}
-
 sub notify {
 	# 0 - SERVICE 
 	# 1 - IP
@@ -435,10 +410,10 @@ while (<LOGS>) {
 			if (exists $possible_attackers{$pop3[8]}) {
 				$possible_attackers{$pop3[8]}[0] = $possible_attackers{$pop3[8]}[0] + $pop3[$failed_entry];
 				$possible_attackers{$pop3[8]}[1] = $pop3[6];
-				logger("Possible attacker ".$possible_attackers{$pop3[8]}[0]." attempts with different usernames from ip ".$pop3[8]) if ($debug);
+				logger("Possible attacker update: IP: $pop3[8] Attempts: $possible_attackers{$pop3[8]}[0] Failed entry num is: $failed_entry Line: $_") if ($debug); 
 			} else {
 				$possible_attackers{$pop3[8]} = [ $pop3[$failed_entry], $pop3[6], $service_codes{'pop3'} ];
-				logger("Possible attacker first attempt from ip ".$pop3[8]) if ($debug);
+				logger("Possible attacker new: IP: $pop3[8] Attempts: $possible_attackers{$pop3[8]}[0]  Failed entry num is: $failed_entry Line: $_") if ($debug); 
 			}
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 			store_to_db(0, $pop3[8], 2, $pop3[6]);
@@ -473,10 +448,10 @@ while (<LOGS>) {
 			if (exists $possible_attackers{$imap[8]}) {
 				$possible_attackers{$imap[8]}[0] = $possible_attackers{$imap[8]}[0] + $imap[$failed_entry];
 				$possible_attackers{$imap[8]}[1] = $imap[6];
-				logger("Possible attacker ".$possible_attackers{$imap[8]}[0]." attempts from ip ".$imap[8]) if ($debug);
+				logger("Possible attacker update: IP: $imap[8] Attempts: $possible_attackers{$imap[8]}[0] Failed entry num is: $failed_entry Line: $_") if ($debug); 
 			} else {
 				$possible_attackers{$imap[8]} = [ $imap[$failed_entry], $imap[6], $service_codes{'imap'} ];
-				logger("Possible attacker first attempt from ip ".$imap[8]) if ($debug);
+				logger("Possible attacker new: IP: $imap[8] Attempts: $possible_attackers{$imap[8]}[0] Failed entry num is: $failed_entry Line: $_") if ($debug); 
 			}
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 			store_to_db(0, $imap[8], 4, $imap[6]);
@@ -492,11 +467,18 @@ while (<LOGS>) {
 		my $io_time_now = time();
 		next if (($io_time_now - $io_last_notified) < 900 && $io_already_notified == 1);
 		my @line = split /\s+/, $_;
+		post_a_note(1, 1, "$line[9]||$_");
 		logger("IO error detected: $_") if ($debug);
-		post_notes(1, $line[9], "", "", "$_");
 		$io_already_notified = 1 if ($io_already_notified  == 0); 
 		$io_last_notified = $io_time_now;
- 	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
+ 	} elsif ( $_ =~ /kernel: EDAC/) {
+		my $mem_time_now = time();
+		next if (($mem_time_now - $mem_last_notified) < 900 && $mem_already_notified == 1);
+		post_a_note(1, 9, "$_");
+		logger("Memory corruption detected: $_") if ($debug);
+		$mem_already_notified = 1 if ($mem_already_notified  == 0);
+		$mem_last_notified = $mem_time_now;
+	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
 		my $ip = '';
 		my $user = '';
 		my $ssh_issue = 0; #sshd issue is bruteforce which will be stored to the db and notified to the monitoring if 1. if 2 we only send a notification.
@@ -580,7 +562,7 @@ while (<LOGS>) {
 		$_ =~ s/\'//g;
 		if ($ssh_issue == 1) {
 			next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/ );	# this is the local server
-			#post_notes(2, "BRUTEFORCE", $service_codes{'ssh'}, $ip, $_);
+			#post_a_note(1, 2, "BRUTEFORCE||$service_codes{'ssh'}||$ip||$_");
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 			# Store the bastard to the database
 			store_to_db(0, $ip, 1, $user);
@@ -594,15 +576,15 @@ while (<LOGS>) {
 			if (exists $possible_attackers{$ip}) {
 				$possible_attackers{$ip}[0]++;
 				$possible_attackers{$ip}[1] = $user;
-				logger("Possible attacker ".$possible_attackers{$ip}[0]." attempts with different usernames from ip ".$ip) if ($debug);
+				logger("Possible attacker update: IP: $ip Attempts: $possible_attackers{$ip}[0] Line: $_") if ($debug);
 			} else {
 				$possible_attackers{$ip} = [ 1, $user, $service_codes{'ssh'} ];
-				logger("Possible attacker first attempt from ip ".$ip) if ($debug);
+				logger("Possible attacker update: IP: $ip Attempts: $possible_attackers{$ip}[0] Line: $_") if ($debug);
 			}
-		} elsif ($ssh_issue == 2) {
-			post_notes(2, "UNAUTHORIZED", $service_codes{'ssh'}, $ip, $_);
+		} elsif ($ssh_issue == 2 && $ip !~ /75.125.60.5/) {
+			post_a_note(1, 2, "UNAUTHORIZED||$service_codes{'ssh'}||$ip||$_");
 		}
-	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /failed/ ) {
+	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /Authentication failed/ ) {
 		# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
 		# Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
 		my @ftp = split /\s+/, $_;	
@@ -613,10 +595,10 @@ while (<LOGS>) {
 		if ( exists $possible_attackers {$ftp[5]} && $possible_attackers{$ftp[5]}[1] ne $ftp[11])  {
 			$possible_attackers{$ftp[5]}[0]++;
 			$possible_attackers{$ftp[5]}[1] = $ftp[11];
-			logger("Possible attacker ".$possible_attackers{$ftp[5]}[0]." attempts with different usernames from ip ".$ftp[5]) if ($debug);
+			logger("Possible attacker update: IP: $ftp[5] Attempts: $possible_attackers{$ftp[5]}[0] Line: $_") if ($debug);
 		} else {
 			$possible_attackers{$ftp[5]} = [ 0, $ftp[11], $service_codes{'ftp'} ];
-			logger("Possible attacker first attempt with different usernames from ip ".$ftp[5]) if ($debug);
+			logger("Possible attacker new: IP: $ftp[5] Attempts: $possible_attackers{$ftp[5]}[0] Line: $_") if ($debug);
 		}
 		if ( exists $ftp_faults {$ftp[5]} ) {
 			$ftp_faults{$ftp[5]}++;
