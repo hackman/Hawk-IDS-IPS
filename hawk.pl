@@ -14,7 +14,7 @@ import post_a_note;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '1.22';	# version string
+my $version = '1.25';	# version string
 
 # defining fault hashes
 my %ssh_faults = ();		# ssh faults storage
@@ -210,19 +210,19 @@ sub check_broot {
 	while ( my ($k,$v) = each (%ftp_faults) ) {
 		notify('ftp', $k, $ftp_faults{$k}) if ( $v > $max_attempts );
 	}
-	while ( my ($k,$v) = each (%possible_attackers) ) {
-		if ( $possible_attackers{$k}[0] > 10 ) {
-			if (defined($possible_attackers{$k}[3])) {
-				if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
-					$possible_attackers{$k}[3] = 6;
-					post_a_note(1, 2, "BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
-				}
-			} else {
-				post_a_note(1, 2, "BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
-				$possible_attackers{$k}[3] = 1;
-			}
-		}
-	}
+	#while ( my ($k,$v) = each (%possible_attackers) ) {
+	#	if ( $possible_attackers{$k}[0] > 10 ) {
+	#		if (defined($possible_attackers{$k}[3])) {
+	#			if ($possible_attackers{$k}[0] > 25 && $possible_attackers{$k}[3] < 3) {
+	#				$possible_attackers{$k}[3] = 6;
+	#				post_a_note(1, 2, "BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
+	#			}
+	#		} else {
+	#			post_a_note(1, 2, "BRUTEFORCE||$possible_attackers{$k}[2]||$k||$possible_attackers{$k}[0]");
+	#			$possible_attackers{$k}[3] = 1;
+	#		}
+	#	}
+	#}
 }
 
 # Fork to background
@@ -372,6 +372,7 @@ while (<LOGS>) {
 			$pop3[8] =~ s/rip=(.*),/$1/;
 			$pop3[6] =~ s/user=<(.*)>,/$1/;
 			next if ( $pop3[8] =~ /$myip/ || $pop3[8] =~ /127.0.0.1/);	# this is the local server
+			logger("$failed_entry on line $_") if ($debug);
 			if (exists $possible_attackers{$pop3[8]}) {
 				$possible_attackers{$pop3[8]}[0] = $possible_attackers{$pop3[8]}[0] + $pop3[$failed_entry];
 				$possible_attackers{$pop3[8]}[1] = $pop3[6];
@@ -402,17 +403,20 @@ while (<LOGS>) {
 			save_ip($imap[8]);
 		} elsif ($_ =~ /auth failed/) {
 			my $failed_entry = 14;
-			if ($_ =~ /secured Aborted login/ ) {
+			if ($_ =~ /secured Aborted login/ || $_ =~ /TLS Aborted login/) {
 				$failed_entry = 15;
 			} elsif ($_ =~ /Aborted login/ && $_ !~ /secured/) {
 				$failed_entry = 14;
-			} elsif ($_ =~ /Disconnected/) {
+			} elsif ($_ =~ /Disconnected/ && $_ !~ /Inactivity/) {
 				$failed_entry = 13;
+			} elsif ($_ =~ /Inactivity/) {
+				$failed_entry = 14;
 			}
 			# Jan 27 23:33:24 serv01 dovecot: imap-login: user=<test>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 3 attempts)
 			$imap[8] =~ s/rip=(.*),/$1/;
 			$imap[6] =~ s/user=<(.*)>,/$1/;
 			next if ( $imap[8] =~ /$myip/ || $imap[8] =~ /127.0.0.1/ );	# this is the local server
+			logger("$failed_entry on line $_");
 			if (exists $possible_attackers{$imap[8]}) {
 				$possible_attackers{$imap[8]}[0] = $possible_attackers{$imap[8]}[0] + $imap[$failed_entry];
 				$possible_attackers{$imap[8]}[1] = $imap[6];
