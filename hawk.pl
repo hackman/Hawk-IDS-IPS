@@ -416,7 +416,7 @@ while (<LOGS>) {
 			$imap[8] =~ s/rip=(.*),/$1/;
 			$imap[6] =~ s/user=<(.*)>,/$1/;
 			next if ( $imap[8] =~ /$myip/ || $imap[8] =~ /127.0.0.1/ );	# this is the local server
-			logger("$failed_entry on line $_");
+			logger("$failed_entry on line $_") if ($debug);
 			if (exists $possible_attackers{$imap[8]}) {
 				$possible_attackers{$imap[8]}[0] = $possible_attackers{$imap[8]}[0] + $imap[$failed_entry];
 				$possible_attackers{$imap[8]}[1] = $imap[6];
