@@ -14,7 +14,7 @@ import post_a_note;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '1.21';	# version string
+my $version = '1.22';	# version string
 
 # defining fault hashes
 my %ssh_faults = ();		# ssh faults storage
@@ -69,7 +69,6 @@ if (defined($ARGV[0])) {
 open HOST, '<', '/proc/sys/kernel/hostname' or die "Unable to open hostname file: $!\n";
 $hostname = <HOST>;
 close HOST;
-#$hostname =~ s/[\r|\n]//;
 $hostname =~ s/serv01.//;
 chomp ($hostname);
 
@@ -287,7 +286,6 @@ sub sigChld {
 }
 
 # Call a given function uppon signal receipt!
-$SIG{"HUP"} = \&sigHup;
 $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
@@ -353,39 +351,6 @@ sub notify {
 
 %allowed_ips = firewall_update();
 
-sub sigHup {
-	logger("sigHup detected! Are you my master?");
-	#close HAWK if (defined(<HAWK>));
-	#close STDIN if (defined(<STDIN>));
-	#close STDOUT if (defined(<STDOUT>));
-	#close STDERR if (defined(<STDERR>));
-	#close LOGS if (defined(<LOGS>));
-
-	#open HAWK, '>>', $logfile or die "DIE: Unable to open logfile $logfile: $!\n";
-	#logger("I am still alive as I was able to reopen my log :)");
-	#open STDIN, '<', '/dev/null' or die "DIE: Cannot read stdin: $! \n";
-	#open STDOUT, '>>', '/dev/null' or die "DIE: Cannot write to stdout: $! \n";
-	#if (!$debug) {
-	#	open STDERR, '>>', "$logfile" or die "DIE: Cannot write to $logfile: $! \n";
-	#} else {
-	#	open STDERR, '>>', '/dev/null' or die "DIE: Cannot write to stderr: $! \n";
-	#}
-	open LOGS, $log_list or die "DIE: Unable to open logs: $!\n";
-	# make the output unbuffered
-	#select((select(HAWK), $| = 1)[0]);
-	select((select(LOGS), $| = 1)[0]);
-
-	# Redefine the signals for further restarts!
-	$SIG{"HUP"} = \&sigHup;
-	$SIG{"CHLD"} = \&sigChld;
-	$SIG{__DIE__}  = sub { logger(@_); };
-	# Reload the hash with all ips allowed to ssh into the server
-	%allowed_ips = firewall_update();
-	logger("I am still alive as I was able to update the firewall list :)");
-}
-
-sub main {
-
 while (<LOGS>) {
 	# Dovecot IMAP & POP3
 	if ($_ =~ /pop3-login:/) {
@@ -424,7 +389,10 @@ while (<LOGS>) {
 			}
 			logger("IP $pop3[8]($pop3[6]) faild to identify to dovecot-pop3 $pop3[$failed_entry] times") if ($debug);
 		}
-	} elsif ($_ =~ /imap-login/ ) {
+	# Skip shutting down lines such as:
+	#Aug  4 01:24:34 serv01 dovecot: IMAP(accounts@flyeschool.com): Server shutting down bytes=189/970
+	#ug  4 01:30:31 serv01 dovecot: imap-login: user=<Msussman@marcsussman.com>, method=PLAIN, rip=69.193.200.186, lip=75.125.60.5 Disconnected: Shutting down (auth failed, 1 attempts)
+	} elsif ($_ =~ /imap-login/ && $_ !~ /Shutting down/i) {
 		#Jan 27 23:24:28 serv01 dovecot: imap-login: user=<user>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 1 attempts)
 		my @imap = split /\s+/, $_;
 		if (defined $imap[11] && $imap[11] eq 'Login') {
@@ -482,7 +450,6 @@ while (<LOGS>) {
 		my $ip = '';
 		my $user = '';
 		my $ssh_issue = 0; #sshd issue is bruteforce which will be stored to the db and notified to the monitoring if 1. if 2 we only send a notification.
-		# DA POMISLIM NAD TOVA Jun 11 02:40:11 serv01 sshd[1826]: Connection from 82.67.144.115 port 51983
 		if ($_ =~ /Failed \w \w/ ||
 			$_ =~ /authentication failure/ ||
 			$_ =~ /Invalid user/i ||
@@ -581,7 +548,7 @@ while (<LOGS>) {
 				$possible_attackers{$ip} = [ 1, $user, $service_codes{'ssh'} ];
 				logger("Possible attacker update: IP: $ip Attempts: $possible_attackers{$ip}[0] Line: $_") if ($debug);
 			}
-		} elsif ($ssh_issue == 2 && $ip !~ /75.125.60.5/) {
+		} elsif ($ssh_issue == 2) {
 			post_a_note(1, 2, "UNAUTHORIZED||$service_codes{'ssh'}||$ip||$_");
 		}
 	} elsif ( $_ =~ /pure-ftpd:/ && $_ =~ /Authentication failed/ ) {
@@ -644,10 +611,6 @@ while (<LOGS>) {
 		$fw_time = time();
 	}
 }
-}
-
-
-main();
 
 logger("Gone ...after the main loop");
 close LOGS;
