@@ -45,7 +45,7 @@ my $clean_reported = 600;
 my $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 my $pop_max_time = 1800;
 
-my $debug = 0;			# by default debuging is OFF
+my $debug = 1;			# by default debuging is OFF
 my $do_limit = 0;		# by default do not limit the offending IPs
 my $dovecot = 1;
 my $start_time = time();
@@ -140,13 +140,13 @@ sub cleanh {
 sub save_ip {
 	my $ip = shift;
 	if (!defined $authenticated_ips{$ip}) {
-		logger("New pop3/imap authenticated IP $ip ... adding it to the list") if ($debug);
+		#logger("New pop3/imap authenticated IP $ip ... adding it to the list") if ($debug);
 		$authenticated_ips{$ip} = time();
 		open AUTH, '>>', $authenticated_ips_file;
 		print AUTH $ip, "\n";
 		close AUTH;
 	} else {
-		logger("The hash for $ip already exists. Already added as popbeforesmtp ... skipping it!") if ($debug);
+		#logger("The hash for $ip already exists. Already added as popbeforesmtp ... skipping it!") if ($debug);
 	}
 }
 
@@ -263,12 +263,12 @@ sub firewall_update {
 			print $sock "GET /~sentry/cgi-bin/hawkup.cgi?server=$hostname\n\n";
 			while (<$sock>) {
 				chomp($_);
-				logger("Socket answer $_") if ($debug);
+				#logger("Socket answer $_") if ($debug);
 				$own_rules{$_} = $_;
 			}
 			close $sock;
 			while (my $ip = each (%own_rules)) {
-				logger("Allowed IPs hash entry $ip") if ($debug); 
+				#logger("Allowed IPs hash entry $ip") if ($debug); 
 			}
 		} else {
 			logger("Unable to get our allowed hosts list: $!");
@@ -371,6 +371,7 @@ while (<LOGS>) {
 			$user =~ s/^.* user=<(.+)>,.*$/$1/;
 			$ip =~ s/^.* rip=([0-9.]+),.*$/$1/;
 			$attempts =~ s/^.* ([0-9]+) attempts\).*$/$1/;
+			chomp ($user, $ip, $attempts);
 
 			next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/);	# this is the local server
 
@@ -537,7 +538,7 @@ while (<LOGS>) {
 			$possible_attackers{$ftp[5]}[1] = $ftp[11];
 			logger("Possible attacker update: IP: $ftp[5] Attempts: $possible_attackers{$ftp[5]}[0] Line: $_") if ($debug);
 		} else {
-			$possible_attackers{$ftp[5]} = [ 0, $ftp[11], $service_codes{'ftp'} ];
+			$possible_attackers{$ftp[5]} = [ 1, $ftp[11], $service_codes{'ftp'} ];
 			logger("Possible attacker new: IP: $ftp[5] Attempts: $possible_attackers{$ftp[5]}[0] Line: $_") if ($debug);
 		}
 		if ( exists $ftp_faults {$ftp[5]} ) {
