@@ -14,7 +14,7 @@ import post_a_note;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $version = '1.25';	# version string
+my $version = '2.00';	# version string
 
 # defining fault hashes
 my %ssh_faults = ();		# ssh faults storage
@@ -353,86 +353,52 @@ sub notify {
 
 while (<LOGS>) {
 	# Dovecot IMAP & POP3
-	if ($_ =~ /pop3-login:/) {
-		my @pop3 = split /\s+/, $_;
-		if (defined $pop3[10] && $pop3[10] eq 'Login') {
-			# Jan 27 23:06:03 serv01 dovecot: pop3-login: user=<pelletsqa@leepharma.com>, method=PLAIN, rip=121.243.129.200, lip=67.15.172.14 Login
-			$pop3[8] =~ s/rip=(.*),/$1/;
-			save_ip($pop3[8]);
+	if ($_ =~ /pop3-login:|imap-login:/) {
+		my @current_line = split /\s+/, $_;
+		my $current_service = 'imap';
+		$current_service = 'pop3' if ($current_line[5] =~ /pop3-login:/);
+
+		if ((defined $current_line[10] && $current_line[10] eq 'Login') || (defined $current_line[11] && $current_line[11] eq 'Login')) {
+			#If the customer is authenticated via normal Login or TLS/secured Login save the ip inside the relayhosts
+			next if ($current_line[8] !~ /rip/);
+			$current_line[8] =~ s/rip=(.*),/$1/;
+			save_ip($current_line[8]);
 		} elsif ($_ =~ /auth failed/) {
-			my $failed_entry = 14;
-			if ($_ =~ /secured Aborted login/ ) {
-				$failed_entry = 15;
-			} elsif ($_ =~ /Aborted login/ && $_ !~ /secured/) {
-				$failed_entry = 14;
-			} elsif ($_ =~ /Disconnected/) {
-				$failed_entry = 13;
-			}
-			#Jan 27 23:09:37 serv01 dovecot: pop3-login: user=<aaa>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 8 attempts)
-			$pop3[8] =~ s/rip=(.*),/$1/;
-			$pop3[6] =~ s/user=<(.*)>,/$1/;
-			next if ( $pop3[8] =~ /$myip/ || $pop3[8] =~ /127.0.0.1/);	# this is the local server
-			logger("$failed_entry on line $_") if ($debug);
-			if (exists $possible_attackers{$pop3[8]}) {
-				$possible_attackers{$pop3[8]}[0] = $possible_attackers{$pop3[8]}[0] + $pop3[$failed_entry];
-				$possible_attackers{$pop3[8]}[1] = $pop3[6];
-				logger("Possible attacker update: IP: $pop3[8] Attempts: $possible_attackers{$pop3[8]}[0] Failed entry num is: $failed_entry Line: $_") if ($debug); 
+			my $user = $_;
+			my $ip = $_;
+			my $attempts = $_;
+
+			$user =~ s/^.* user=<(.+)>,.*$/$1/;
+			$ip =~ s/^.* rip=([0-9.]+),.*$/$1/;
+			$attempts =~ s/^.* ([0-9]+) attempts\).*$/$1/;
+
+			next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/);	# this is the local server
+
+			if (exists $possible_attackers{$ip}) {
+				$possible_attackers{$ip}[0] = $possible_attackers{$ip}[0] + $attempts;
+				$possible_attackers{$ip}[1] = $user;
+				logger("Possible attacker update: IP: $ip Attempts: $possible_attackers{$ip}[0] User: $user Line: $_") if ($debug); 
 			} else {
-				$possible_attackers{$pop3[8]} = [ $pop3[$failed_entry], $pop3[6], $service_codes{'pop3'} ];
-				logger("Possible attacker new: IP: $pop3[8] Attempts: $possible_attackers{$pop3[8]}[0]  Failed entry num is: $failed_entry Line: $_") if ($debug); 
+				$possible_attackers{$ip} = [ $attempts, $user, $service_codes{'pop3'} ];
+				logger("Possible attacker new: IP: $ip Attempts: $attempts User: $user Line: $_") if ($debug); 
 			}
 			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
-			store_to_db(0, $pop3[8], 2, $pop3[6]);
-			if (exists $pop3_faults{$pop3[8]}) {
-				$pop3_faults{$pop3[8]} = $pop3_faults{$pop3[8]} + $pop3[$failed_entry];
-			} else {
-				$pop3_faults{$pop3[8]} = $pop3[$failed_entry];
+			if ($current_service eq 'pop3') {
+				store_to_db(0, $ip, 2, $user);
+				if (exists $pop3_faults{$ip}) {
+					$pop3_faults{$ip} = $pop3_faults{$ip} + $attempts;
+				} else {
+					$pop3_faults{$ip} = $attempts;
+				}
+			} elsif ($current_service eq 'imap') {
+				store_to_db(0, $ip, 3, $user);
+				if (exists $imap_faults{$ip}) {
+					$imap_faults{$ip} = $imap_faults{$ip} + $attempts;
+				} else {
+					$imap_faults{$ip} = $attempts;
+				}
 			}
-			logger("IP $pop3[8]($pop3[6]) faild to identify to dovecot-pop3 $pop3[$failed_entry] times") if ($debug);
-		}
-	# Skip shutting down lines such as:
-	#Aug  4 01:24:34 serv01 dovecot: IMAP(accounts@flyeschool.com): Server shutting down bytes=189/970
-	#ug  4 01:30:31 serv01 dovecot: imap-login: user=<Msussman@marcsussman.com>, method=PLAIN, rip=69.193.200.186, lip=75.125.60.5 Disconnected: Shutting down (auth failed, 1 attempts)
-	} elsif ($_ =~ /imap-login/ && $_ !~ /Shutting down/i) {
-		#Jan 27 23:24:28 serv01 dovecot: imap-login: user=<user>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 1 attempts)
-		my @imap = split /\s+/, $_;
-		if (defined $imap[11] && $imap[11] eq 'Login') {
-		# Jan 27 23:31:26 serv01 dovecot: imap-login: user=<m.harrington@okemomountainschool.org>, method=PLAIN, rip=67.223.78.73, lip=67.15.172.14, TLS Login
-		# Jan 27 23:31:52 serv01 dovecot: imap-login: user=<m.harrington@okemomountainschool.org>, method=PLAIN, rip=67.15.172.14, lip=67.15.172.14, secured Login
-			$imap[8] =~ s/rip=(.*),/$1/;
-			save_ip($imap[8]);
-		} elsif ($_ =~ /auth failed/) {
-			my $failed_entry = 14;
-			if ($_ =~ /secured Aborted login/ || $_ =~ /TLS Aborted login/) {
-				$failed_entry = 15;
-			} elsif ($_ =~ /Aborted login/ && $_ !~ /secured/) {
-				$failed_entry = 14;
-			} elsif ($_ =~ /Disconnected/ && $_ !~ /Inactivity/) {
-				$failed_entry = 13;
-			} elsif ($_ =~ /Inactivity/) {
-				$failed_entry = 14;
-			}
-			# Jan 27 23:33:24 serv01 dovecot: imap-login: user=<test>, method=PLAIN, rip=77.70.33.151, lip=67.15.172.14 Aborted login (auth failed, 3 attempts)
-			$imap[8] =~ s/rip=(.*),/$1/;
-			$imap[6] =~ s/user=<(.*)>,/$1/;
-			next if ( $imap[8] =~ /$myip/ || $imap[8] =~ /127.0.0.1/ );	# this is the local server
-			logger("$failed_entry on line $_") if ($debug);
-			if (exists $possible_attackers{$imap[8]}) {
-				$possible_attackers{$imap[8]}[0] = $possible_attackers{$imap[8]}[0] + $imap[$failed_entry];
-				$possible_attackers{$imap[8]}[1] = $imap[6];
-				logger("Possible attacker update: IP: $imap[8] Attempts: $possible_attackers{$imap[8]}[0] Failed entry num is: $failed_entry Line: $_") if ($debug); 
-			} else {
-				$possible_attackers{$imap[8]} = [ $imap[$failed_entry], $imap[6], $service_codes{'imap'} ];
-				logger("Possible attacker new: IP: $imap[8] Attempts: $possible_attackers{$imap[8]}[0] Failed entry num is: $failed_entry Line: $_") if ($debug); 
-			}
-			# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
-			store_to_db(0, $imap[8], 4, $imap[6]);
-			if ( exists $imap_faults {$imap[8]} ) {
-				$imap_faults{$imap[8]} = $imap_faults{$imap[8]} + $imap[$failed_entry];
-			} else {
-				$imap_faults{$imap[8]} = $imap[$failed_entry];
-			}
-			logger("IP $imap[8]($imap[6]) faild to identify to dovecot-pop3 $imap[$failed_entry] times") if ($debug);
+			logger("Service: $current_service IP: $ip User: $user Attempts: $attempts") if ($debug);
 		}
 	} elsif ( $_ =~ /I\/O error/i ) { 
 		# Feb 14 19:18:35 serv01 kernel: end_request: I/O error, dev sdb, sector 1405725148
@@ -453,7 +419,9 @@ while (<LOGS>) {
 	} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
 		my $ip = '';
 		my $user = '';
-		my $ssh_issue = 0; #sshd issue is bruteforce which will be stored to the db and notified to the monitoring if 1. if 2 we only send a notification.
+		#sshd issue is bruteforce which will be stored to the db and notified to the monitoring if 1.
+		#if 2 we only send a notification.
+		my $ssh_issue = 0;
 		if ($_ =~ /Failed \w \w/ ||
 			$_ =~ /authentication failure/ ||
 			$_ =~ /Invalid user/i ||
@@ -498,6 +466,7 @@ while (<LOGS>) {
 			} else {
 				#May 15 09:39:12 serv01 sshd[9474]: Failed password for root from 194.204.32.101 port 17326 ssh2
 				#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
+				next if (! defined($sshd[10]));
 				$sshd[10] =~ s/::ffff://;
 				$ip = $sshd[10];
 				$user = $sshd[8];
