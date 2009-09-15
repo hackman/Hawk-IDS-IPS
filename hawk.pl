@@ -45,7 +45,7 @@ my $clean_reported = 600;
 my $max_attempts = 5;	# max number of attempts(for $broot_time) before notify
 my $pop_max_time = 1800;
 
-my $debug = 1;			# by default debuging is OFF
+my $debug = 0;			# by default debuging is OFF
 my $do_limit = 0;		# by default do not limit the offending IPs
 my $dovecot = 1;
 my $start_time = time();
