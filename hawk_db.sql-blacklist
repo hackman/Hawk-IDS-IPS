@@ -1,0 +1,21 @@
+SET client_encoding = 'SQL_ASCII';
+SET check_function_bodies = false;
+SET SESSION AUTHORIZATION 'postgres';
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO PUBLIC;
+SET SESSION AUTHORIZATION 'hawk';
+SET search_path = public, pg_catalog;
+
+CREATE TABLE blacklist (
+    id serial NOT NULL,
+    date_add timestamp without time zone DEFAULT now() NOT NULL,
+    date_rem timestamp without time zone,
+    ip inet,
+    reason text,
+    count integer
+);
+
+COMMENT ON TABLE blacklist IS 'Blacklisted IPs';
+ALTER TABLE ONLY blacklist ADD CONSTRAINT blacklist_pkey PRIMARY KEY (id);
+CREATE INDEX date_added ON blacklist USING btree (date_add);
+
