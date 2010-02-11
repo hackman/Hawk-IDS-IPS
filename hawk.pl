@@ -426,7 +426,7 @@ while (<LOGS>) {
 		if ($_ =~ /Failed \w \w/ ||
 			$_ =~ /authentication failure/ ||
 			$_ =~ /Invalid user/i ||
-			$_ =~ /Connection closed by/ ||
+			#$_ =~ /Connection closed by/ ||
 			$_ =~ /Bad protocol/) {
 			# After if starts here :)
 			my @sshd = split /\s+/, $_;
@@ -438,12 +438,12 @@ while (<LOGS>) {
 				$ip = $sshd[12];
 				$user = $sshd[10];
 				logger("sshd: Incorrect V1 $user $ip") if ($debug);
-			} elsif ( $sshd[5] =~ /Connection/ ) {
-				#May 25 02:11:34 serv01 sshd[10146]: Connection closed by 87.118.135.130
-				$sshd[8] =~ s/::ffff://;
-				$ip = $sshd[8];
-				$user = 'none';
-				logger("sshd: Incorrect KEY $user $ip") if ($debug);
+			#} elsif ( $sshd[5] =~ /Connection/ ) {
+			#	#May 25 02:11:34 serv01 sshd[10146]: Connection closed by 87.118.135.130
+			#	$sshd[8] =~ s/::ffff://;
+			#	$ip = $sshd[8];
+			#	$user = 'none';
+			#	logger("sshd: Incorrect KEY $user $ip") if ($debug);
 			} elsif ( $sshd[5] =~ /Invalid/) {
 				#May 19 22:54:19 serv01 sshd[21552]: Invalid user supprot from 194.204.32.101
 				$sshd[9] =~ s/::ffff://;
