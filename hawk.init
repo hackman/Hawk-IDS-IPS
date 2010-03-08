@@ -1,6 +1,7 @@
 #!/bin/bash
 # Hawk init script
-# version 2.2
+
+VERSION='2.3'
 hawkurl='http://master.sgvps.net/hawk/'
 pidfile='/var/run/hawk.pid'
 program='/usr/local/sbin/hawk.pl'
@@ -77,15 +78,15 @@ check_run() {
 # change the DB password for all hawk tools
 change_hawk_pass() {
 	echo "Changing Hawk password"
-        newpass=`echo $RANDOM|md5sum|cut -c 1-12`
-        echo "New password: $newpass"
-        psql -Upostgres -c "ALTER USER hawk PASSWORD '$newpass'" template1
-		sed -i '/hawk/D' ~/.pgpass
-        echo "*:5432:hawk:hawk:$newpass" >> ~/.pgpass
-	if ( ! grep hawk /var/lib/pgsql/data/pg_hba.conf > /dev/null ); then
-		sed -i "/^local\s\+all\s\+all\s\+ident\s\+sameuser/ihost hawk hawk 127.0.0.1 md5" /var/lib/pgsql/data/pg_hba.conf 
-		/etc/init.d/postgresql reload
-	fi
+	newpass=$(head -n 5 /dev/urandom | md5sum |cut -c 1-12)
+	echo "New password: $newpass"
+	psql -Upostgres -c "ALTER USER hawk PASSWORD '$newpass'" template1
+	sed -i '/hawk/D' ~/.pgpass
+	echo "*:5432:hawk:hawk:$newpass" >> ~/.pgpass
+	#if ( ! grep hawk /var/lib/pgsql/data/pg_hba.conf > /dev/null ); then
+	#	sed -i "/^local\s\+all\s\+all\s\+ident\s\+sameuser/ihost hawk hawk 127.0.0.1 md5" /var/lib/pgsql/data/pg_hba.conf 
+	#	/etc/init.d/postgresql reload
+	#fi
 	chmod 600 ~/.pgpass
 	#sed -i "/^my \$pass/s/=.*/= '$newpass';/" /usr/local/sbin/hawk.pl
 	sed -i "/dbpass/s/=.*/=$newpass/" /home/sentry/hackman/hawk-web.conf
@@ -97,8 +98,6 @@ change_hawk_pass() {
 		/etc/init.d/mailquotad restart
 	fi	
 }
-
-
 
 # Install or reinstall the Hawk
 hawk_install() {
@@ -139,12 +138,10 @@ hawk_install() {
 	rm -f /home/sentry/hackman/templates.tgz
 	chown -R sentry: /home/sentry/hackman 
 	echo "Initializing Hawk DB..."
-	su - postgres -c "psql -c \"CREATE USER hawk PASSWORD 'myHawkPass'\" template1"
-	su - postgres -c "psql -c 'CREATE DATABASE hawk OWNER hawk' template1"
-	mv hawk_db.sql /var/lib/pgsql/
-	su - postgres -c "psql -f hawk_db.sql hawk"
+	psql -Upostgres -c "CREATE USER hawk PASSWORD 'myHawkPass'" template1
+	psql -Upostgres -c 'CREATE DATABASE hawk OWNER hawk' template1
+	psql -f /root/hawk_db.sql hawk
 	change_hawk_pass
-	rm -f /var/lib/pgsql/hawk_db.sql
 	if ( ! grep 'HAWK-' /root/admin/sgfirewall > /dev/null ); then
 		echo -e "############ HAWK-BLOCKED ####################\n############ HAWK+BLOCKED ####################" >> /root/admin/sgfirewall
 		echo "Added HAWK lines to /root/admin/sgfirewall"
@@ -156,11 +153,12 @@ hawk_install() {
 		chattr +ia /var/spool/cron/root
 	fi
 }
+
 create_table() {
 	if ( ! wget -c $hawkurl/hawk_db.sql-$1 -O /var/lib/pgsql/hawk_db.sql-$1 ); then
 		return 0
 	fi
-	su - postgres -c "psql -f hawk_db.sql-$1 hawk"
+	psql -Upostgres -f /var/lib/pgsql/hawk_db.sql-$1 hawk
 	rm -f /var/lib/pgsql/hawk_db.sql-$1
 }
 
