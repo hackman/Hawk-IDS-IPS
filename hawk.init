@@ -140,7 +140,7 @@ hawk_install() {
 	echo "Initializing Hawk DB..."
 	psql -Upostgres -c "CREATE USER hawk PASSWORD 'myHawkPass'" template1
 	psql -Upostgres -c 'CREATE DATABASE hawk OWNER hawk' template1
-	psql -f /root/hawk_db.sql hawk
+	psql -Upostgres -f /root/hawk_db.sql hawk
 	change_hawk_pass
 	if ( ! grep 'HAWK-' /root/admin/sgfirewall > /dev/null ); then
 		echo -e "############ HAWK-BLOCKED ####################\n############ HAWK+BLOCKED ####################" >> /root/admin/sgfirewall
