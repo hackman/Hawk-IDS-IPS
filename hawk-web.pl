@@ -404,14 +404,14 @@ function sort(val) {
 		$line .= $broots0 if (defined($broots0));
 		$line .= '|';
 		$line .= $failed0 if (defined($failed0));
-        $line .= '|0:';
+		$line .= '|0:';
 		$line .= $blacklisted_1h_active if (defined($failed0));
 		$line .= '|0:';
 		$line .= $blacklisted_days_active0[0] if (defined($blacklisted_days_active0[0]));
 		$line .= '|1:';
-        $line .= $blacklisted_1h_removed if (defined($blacklisted_1h_removed));
+		$line .= $blacklisted_1h_removed if (defined($blacklisted_1h_removed));
 		$line .= '|1:';
-        $line .= $blacklisted_days_removed0[0] if (defined($blacklisted_days_removed0[0]));
+		$line .= $blacklisted_days_removed0[0] if (defined($blacklisted_days_removed0[0]));
 		print $line;
 		print "\n";
 	} else {
