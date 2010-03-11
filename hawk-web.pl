@@ -14,8 +14,8 @@ require "/home/sentry/hackman/cpustats/modules/parse_config.pm";
 import parse_config;
 
 # system variables
-$ENV{PATH} = '';		# remove unsecure path
-my $version = '1.00';		# version string
+$ENV{PATH} = '';					# remove unsecure path
+my $VERSION = '1.0.0';				# version string
 
 my $conf = '/home/sentry/hackman/hawk-web.conf';
 # make DB vars
@@ -32,14 +32,14 @@ sub web_error {
 }
 
 sub get_template {
-        my $out='';
-        if (defined($_[0])) {
+	my $out='';
+	if (defined($_[0])) {
 		my $template = $config{'template_path'}.basename($_[0]).'.tmpl';
-                open FILE, '<', $template or die "Unable to open template $template: $!\n";
+		open FILE, '<', $template or die "Unable to open template $template: $!\n";
 		$out .= $_ while (<FILE>);
-                close FILE;
-        }
-        return $out;
+		close FILE;
+	}
+	return $out;
 }
 
 sub build_graph {
@@ -87,15 +87,17 @@ print "Content-type: text/html\r\n\r\n";
 # prepare the connection
 our $conn	= DBI->connect( $config{'db'}, $config{'dbuser'}, $config{'dbpass'}, { PrintError => 1, AutoCommit => 1 } ) 
 	or web_error("Unable to connecto to DB: $!\n");
+
 my $action='';
 $action=param('action') if defined(param('action'));
+
 if (!defined(param('cgi'))) {
 	my $out = get_template('main');
-	$out =~ s/__VER__/$version/gi;
+	$out =~ s/__VER__/$VERSION/gi;
 	print $out;
 }
+
 if ($action eq 'listfailed') {
-# 	header('listfailed');
 	my $table .= get_template('failed');
 	my $lines = '';
 	my $line0 = "<tr><td class='td0'>__DATE__</td><td class='td0'><a href='?action=search&w=ip&addr=__IP__'>__IP__</a></td><td class='td0'><a href='?action=stat&w=sv&ss=__SERVICE__</a></td><td class='td0'><a href='?action=search&w=us&user=__USER__'>__USER__</td></tr>";
@@ -111,9 +113,11 @@ if ($action eq 'listfailed') {
 			$order = '"date"';
 		}
 	}
+
 	my $get_failed = $conn->prepare("SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date\",ip,service,\"user\" FROM failed_log WHERE \"date\" > (now() - interval '12 hour') ORDER BY $order DESC") 
 		or web_error("Unable to prepare get_broots: $DBI::errstr");
 	$get_failed->execute;
+
 	while (my ($date,$ip,$service,$user) = $get_failed->fetchrow_array) {
 		my $line = $line0;
 		my $service_name = get_num_service($service);
@@ -124,14 +128,15 @@ if ($action eq 'listfailed') {
 		$line =~ s/__USER__/$user/g;
 		$lines .= $line;
 	}
+
 	$table =~ s/__CONTENTS__/$lines/;
 	$html .= $table;
 } elsif ($action eq 'listbroots') {
-# 	header('listbroots');
 	my $table = get_template('broots');
 	my $lines = '';
 	my $line0 = "<tr><td class='td0'>__DATE__</td><td class='td0'><a href='?action=search&w=ip&addr=__IP__'>__IP__</a></td><td class='td0'><a href='?action=stat&w=sv&ss=__SERVICE__</a></td></tr>\n";
 	my $order = '"date"';
+
 	if (defined(param('order'))) {
 		if (param('order') == 1) {
 			$order = 'ip';
@@ -141,8 +146,10 @@ if ($action eq 'listfailed') {
 			$order = '"date"';
 		}
 	}
+
 	my $get_broots = $conn->prepare("SELECT to_char(\"date\", 'DD.Mon.YYYY HH24:MI') AS \"date\",ip,service FROM broots WHERE \"date\" > (now() - interval '12 hour') ORDER BY $order DESC") 
 		or web_error("Unable to prepare get_broots: $DBI::errstr");
+
 	$get_broots->execute;
 	while (my ($date,$ip,$service) = $get_broots->fetchrow_array) {
 		my $line = $line0;
@@ -155,8 +162,8 @@ if ($action eq 'listfailed') {
 	$table =~ s/__CONTENTS__/$lines/;
 	$html .= $table;
 } elsif ($action eq 'search') {
-# 	header('search');
 	print get_template('search');
+
 	if (defined(param('w'))) {
 		my $query = '';
 		my @values;
@@ -408,17 +415,7 @@ function sort(val) {
         $line .= $blacklisted_1h_removed if (defined($blacklisted_1h_removed));
 		$line .= '|1:';
         $line .= $blacklisted_days_removed0[1] if (defined($blacklisted_days_removed0[1]));
-#		print "$broots0|$failed0|0:$blacklisted_1h_active|0:$blacklisted_days_active0[1]|1:$blacklisted_1h_removed|1:$blacklisted_days_removed0[1]";
 		print $line;
-# 		$blacklisted_days_active->execute('1');
-# 		while (my ($date, $count) = $blacklisted_days_active->fetchrow_array) {
-# 			print "|0:$date:$count";
-# 		}
-# 		print "|1:$blacklisted_1h_removed";
-# 		$blacklisted_days_removed->execute('1');
-# 		while (my ($date, $count) = $blacklisted_days_removed->fetchrow_array) {
-# 			print "|1:$date:$count";
-# 		}
 		print "\n";
 	} else {
 		my $brutes1 = $conn->prepare("
@@ -430,19 +427,6 @@ function sort(val) {
 		my $brutes7 = $conn->prepare("
 			SELECT DISTINCT ip FROM broots
 			WHERE date > (now() - interval '7 day') ORDER BY ip");
-
-  		#my $ftp = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
- 		#	WHERE service = \'0\' AND date > (now() - interval \'1 hour\')');
- 		#my $ssh = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
- 		#	WHERE service = \'1\' AND date > (now() - interval \'1 hour\')');
-		#my $pop3 = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-		#	WHERE service = \'2\' AND date > (now() - interval \'1 hour\')');
-		#my $imap = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-		#	WHERE service = \'3\' AND date > (now() - interval \'1 hour\')');
-		#my $webmail = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log
-		#	WHERE service = \'4\' AND date > (now() - interval \'1 hour\')');
-		#my $cpanel = $conn->selectrow_array('SELECT COUNT(id) FROM failed_log 
-		#	WHERE service = \'5\' AND date > (now() - interval \'1 hour\')');
 
 		$html .= get_template('summary');
 
@@ -523,12 +507,6 @@ function sort(val) {
 	            WHERE service = '$service_codes{$service_key_name}' AND date > (now() - interval '1 hour')");
 			$line1 =~ s/MY$service_key_name/$failed_login_count/i;
 		}		
-
-		#$line1 =~ s/__FTP__/$ftp/;
-		#$line1 =~ s/__SSH__/$ssh/;
-		#$line1 =~ s/__POP3__/$pop3/;
-		#$line1 =~ s/__IMAP__/$imap/;
-		#$line1 =~ s/__CPANEL__/$cpanel/;
 
 		$html =~ s/__TABLE2__/$line1/;
 		
