@@ -52,38 +52,3 @@ COMMENT ON TABLE blacklist IS 'Blacklisted IPs';
 ALTER TABLE ONLY blacklist ADD CONSTRAINT blacklist_pkey PRIMARY KEY (id);
 CREATE INDEX date_added ON blacklist USING btree (date_add);
 
-CREATE SCHEMA exim;
-
-SET search_path = exim, pg_catalog;
-
-CREATE TABLE mail_quota (
-    id integer NOT NULL,
-    date time without time zone NOT NULL,
-    username text NOT NULL,
-    address text NOT NULL,
-    quota bigint NOT NULL,
-    used bigint NOT NULL,
-    per double precision NOT NULL
-);
-
-COMMENT ON COLUMN mail_quota.date IS 'Date added';
-COMMENT ON COLUMN mail_quota.username IS 'username ';
-COMMENT ON COLUMN mail_quota.address IS 'E-Mail address';
-COMMENT ON COLUMN mail_quota.quota IS 'Max mail quota in bytes';
-COMMENT ON COLUMN mail_quota.used IS 'Used quota ';
-COMMENT ON COLUMN mail_quota.per IS 'Percent used quota';
-
-CREATE SEQUENCE mail_quota_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MAXVALUE
-    NO MINVALUE
-    CACHE 1;
-
-ALTER SEQUENCE mail_quota_id_seq OWNED BY mail_quota.id;
-ALTER TABLE mail_quota ALTER COLUMN id SET DEFAULT nextval('mail_quota_id_seq'::regclass);
-
-CREATE INDEX date ON mail_quota USING btree (date);
-
-ALTER TABLE exim.mail_quota_id_seq OWNER TO hawk;
-ALTER TABLE exim.mail_quota OWNER TO hawk;
