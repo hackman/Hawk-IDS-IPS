@@ -15,7 +15,7 @@ import parse_config;
 
 # system variables
 $ENV{PATH} = '';					# remove unsecure path
-my $VERSION = '1.0.0';				# version string
+my $VERSION = '2.0.1';				# version string
 
 my $conf = '/home/sentry/hackman/hawk-web.conf';
 # make DB vars
@@ -299,8 +299,8 @@ if ($action eq 'listfailed') {
 		if (defined(param('sort'))) {
 			$sort = 'ip' if param('sort') == 0;
 		}
- 		my $query1 = "SELECT ip,COUNT(ip) AS count FROM failed_log WHERE \"service\" = '$service_id' AND \"date\" > (now() - interval '1 hour') GROUP BY ip ORDER BY $sort DESC";
- 		my $query24 = "SELECT ip,COUNT(ip) AS count FROM failed_log WHERE \"service\" = '$service_id' AND \"date\" > (now() - interval '24 hour') GROUP BY ip ORDER BY $sort DESC";
+ 		my $query1 = "SELECT ip,COUNT(ip) AS count FROM failed_log WHERE service = '$service_id' AND date > (now() - interval '1 hour') GROUP BY ip ORDER BY $sort DESC";
+ 		my $query24 = "SELECT ip,COUNT(ip) AS count FROM failed_log WHERE service = '$service_id' AND date > (now() - interval '24 hour') GROUP BY ip ORDER BY $sort DESC";
 		my $get_info1 = $conn->prepare($query1) or web_error("Unable to prepare query: $DBI::errstr");
 		my $get_info24 = $conn->prepare($query24) or web_error("Unable to prepare query: $DBI::errstr");
 		$get_info1->execute() or web_error("Unable to execute query: $DBI::errstr");
@@ -334,19 +334,16 @@ function sort(val) {
 			print $line;
 		}
 		print '</table>';
-		$get_info1->execute() or web_error("Unable to execute query: $DBI::errstr");
+		$get_info24->execute() or web_error("Unable to execute query: $DBI::errstr");
 		printf $table, $service_name, 'day';
 		while ( my @str =  $get_info24->fetchrow_array) {
 			my $line = $line0;		
-			$line =~ s/__IP__/$str[0]/;
+			$line =~ s/__IP__/$str[0]/g;
 			$line =~ s/__COUNT__/$str[1]/;
 			print $line;
 		}
 		print '</table>';
-
-
 	}
-
 } else {
 	my $lines = '';
 	my $line0 = "<tr><td>__DATE__</td><td>__COUNT__</td></tr>\n";
@@ -410,11 +407,11 @@ function sort(val) {
         $line .= '|0:';
 		$line .= $blacklisted_1h_active if (defined($failed0));
 		$line .= '|0:';
-		$line .= $blacklisted_days_active0[1] if (defined($blacklisted_days_active0[1]));
+		$line .= $blacklisted_days_active0[0] if (defined($blacklisted_days_active0[0]));
 		$line .= '|1:';
         $line .= $blacklisted_1h_removed if (defined($blacklisted_1h_removed));
 		$line .= '|1:';
-        $line .= $blacklisted_days_removed0[1] if (defined($blacklisted_days_removed0[1]));
+        $line .= $blacklisted_days_removed0[0] if (defined($blacklisted_days_removed0[0]));
 		print $line;
 		print "\n";
 	} else {
