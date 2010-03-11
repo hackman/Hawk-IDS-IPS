@@ -30,18 +30,21 @@ my %config = parse_config($conf);
 # Hawk files
 my $logfile = '/var/log/hawk.log';	# daemon logfile
 my $pidfile = '/var/run/hawk.pid';	# daemon pidfile
-my $log_list = '/usr/bin/tail -s 0.03 -F --max-unchanged-stats=20 /var/log/messages /var/log/secure /var/log/maillog /usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log |';
+my $log_list = '/usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 \
+					/var/log/messages \
+					/var/log/secure \
+					/var/log/maillog \
+					/usr/local/cpanel/logs/login_log |';
 
 my $broot_time = 300;				# time(in seconds) before cleaning the hashes
 my $clean_reported = 600;
 my $max_attempts = 5;				# max number of attempts(for $broot_time) before notify
 
-my $debug = 0;						# by default debuging is OFF
+my $debug = 1;						# by default debuging is OFF
 my $do_limit = 0;					# by default do not limit the offending IPs
 my $start_time = time();
 
 my $fw_time = $start_time;
-my $myip = get_ip();
 my $hostname = '';
 my %service_codes = split(/[:\s]/, $config{'service_ids'});
 
@@ -66,6 +69,14 @@ $0 = "[Hawk]";
 
 # open the logfile
 open HAWK, '>>', $logfile or die "DIE: Unable to open logfile $logfile: $!\n";
+my $myip = get_ip();
+my %never_block = ("$myip" => 1, "127.0.0.1" => 1);
+
+sub logger {
+	print HAWK strftime('%b %d %H:%M:%S', localtime(time)) . ' ' . $_[0] . "\n";
+}
+
+
 logger("Hawk version $VERSION started!");
 
 # check if the daemon is running
@@ -94,9 +105,7 @@ sub get_ip {
 		if ( $_ =~ /eth0$/) {
 			@ip = split /\s+/, $_;
 			$ip[2] =~ s/\/[0-9]+//;
-			if ($debug) {
-				print $ip[2], "\n";
-			}
+			logger("Server ip: $ip[2]") if ($debug);
 		}
 	}
 	close IP;
@@ -108,10 +117,6 @@ sub get_time {
 	return strftime('%b %d %H:%M:%S', localtime(time));
 }
 
-sub logger {
-	print HAWK strftime('%b %d %H:%M:%S', localtime(time)) . ' ' . $_[0] . "\n";
-}
-
 # clean the hashes
 sub cleanh {
 	delete @ftp_faults{keys %ftp_faults};
@@ -120,7 +125,7 @@ sub cleanh {
 	delete @imap_faults{keys %imap_faults};
 	delete @cpanel_faults{keys %cpanel_faults};
 	delete @notifications{keys %notifications};
-	logger("hashes cleaned!") if ($debug);
+	logger("All faults hashes cleaned!") if ($debug);
 }
 
 # check for broots
@@ -224,7 +229,7 @@ sub notify {
 	if (! exists($notifications{$_[1]})) { 
 		$notifications{$_[1]}=1;
 		store_to_db(1, $_[1], $_[0]);
-		logger("!!! $_[0] $_[1] failed $_[2] times in $broot_time seconds") if ($debug);
+		logger("!!! $_[0] $_[1] failed $_[2] times in $broot_time seconds. It is now added to the db blocklist!") if ($debug);
 	}
 	# Limit the offender
 	if ($do_limit) {
@@ -259,7 +264,7 @@ while (<LOGS>) {
 			$attempts =~ s/^.* ([0-9]+) attempts\).*$/$1/;
 			chomp ($user, $ip, $attempts);
 
-			next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/);	# this is the local server
+			next if (exists($never_block{$ip}) && $never_block{$ip});	# Do not block never block
 
 			if (exists $possible_attackers{$ip}) {
 				$possible_attackers{$ip}[0] = $possible_attackers{$ip}[0] + $attempts;
@@ -336,9 +341,10 @@ while (<LOGS>) {
 		} 
 
 		$_ =~ s/\'//g;
-		next if ( $ip =~ /$myip/ || $ip =~ /127.0.0.1/ );	# this is the local server
+		next if (exists($never_block{$ip}) && $never_block{$ip});	# this is the local server
 		# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 		# Store attacker's ip to the database
+		logger("SSH store_to_db: 0, $ip, 1, $user") if ($debug);
 		store_to_db(0, $ip, 1, $user);
 		# Increase the attempts
 		if ( exists $ssh_faults {$ip} ) {
@@ -360,6 +366,7 @@ while (<LOGS>) {
 		# Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
 		my @ftp = split /\s+/, $_;	
  		$ftp[5] =~ s/\(.*\@(.*)\)/$1/;	# get the IP
+		next if (exists($never_block{$ftp[5]}) && $never_block{$ftp[5]});   # Do not block never block
 		$ftp[11] =~ s/\[(.*)\]/$1/;		# get the username
 		# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
 		store_to_db(0, $ftp[5], 0, $ftp[11]);
@@ -376,11 +383,13 @@ while (<LOGS>) {
 		} else {
 			$ftp_faults{$ftp[5]} = 1;
 		}
-		logger("IP $ftp[5]($ftp[11]) failed to identify to Pure-FTPD.") if ($debug);
+		logger("IP: $ftp[5] User: ($ftp[11]) failed to identify to Pure-FTPD.") if ($debug);
 	} elsif ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) {
+		logger("cPanel/Webmail failed login attempt: $_");
 		#209.62.36.16 - webmail.siteground216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
 		#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
 		my @cpanel = split /\s+/;
+		next if (exists($never_block{$cpanel[0]}) && $never_block{$cpanel[0]});   # Do not block never block
 		my $service = $service_codes{'webmail'};
 		$service = $service_codes{'cpanel'} if ($cpanel[10] eq 'cpaneld:');
 		$cpanel[2] = '' if $cpanel[2] =~ /\[/;
@@ -391,7 +400,7 @@ while (<LOGS>) {
 		} else {
 			$cpanel_faults{$cpanel[0]} = 1;
 		}
-		logger("IP $cpanel[0]($cpanel[2])failed to identify to cPanel($service).") if ($debug);
+		logger("IP: $cpanel[0] User: $cpanel[2] failed to identify to cPanel/Webmail. Exact service: $service") if ($debug);
    	} else {
 		next;
 	}
@@ -401,6 +410,7 @@ while (<LOGS>) {
 	my $curr_time = time();
 
 	if (($curr_time - $start_time) > $broot_time) {		# if the passed time is grater then $broot_time
+		logger("Cleaning the faults hashes and resetting the timers") if ($debug);
 		cleanh();										# clean the hashes
 		$start_time = time();							# set the start_time to now
 	}
