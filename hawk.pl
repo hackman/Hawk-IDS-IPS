@@ -112,11 +112,6 @@ sub get_ip {
 	return $ip[2]
 }
 
-# generate time format: 15.May.07 02:41:52
-sub get_time {
-	return strftime('%b %d %H:%M:%S', localtime(time));
-}
-
 # clean the hashes
 sub cleanh {
 	delete @ftp_faults{keys %ftp_faults};
