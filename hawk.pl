@@ -12,7 +12,7 @@ import parse_config;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '3.0.1';	# version string
+my $VERSION = '3.0.2';	# version string
 
 # defining fault hashes
 my %ssh_faults = ();				# ssh faults storage
@@ -44,7 +44,6 @@ my $debug = 1;						# by default debuging is OFF
 my $do_limit = 0;					# by default do not limit the offending IPs
 my $start_time = time();
 
-my $hostname = '';
 my %service_codes = split(/[:\s]/, $config{'service_ids'});
 
 # check for debug
@@ -53,12 +52,6 @@ if (defined($ARGV[0])) {
 		$debug=1;					# turn on debuging
 	}
 }
-
-open HOST, '<', '/proc/sys/kernel/hostname' or die "Unable to open hostname file: $!\n";
-$hostname = <HOST>;
-close HOST;
-$hostname =~ s/serv01.//;
-chomp ($hostname);
 
 # changing to unbuffered output
 our $| = 1;
