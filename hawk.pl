@@ -12,7 +12,7 @@ import parse_config;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '3.0.0';	# version string
+my $VERSION = '3.0.1';	# version string
 
 # defining fault hashes
 my %ssh_faults = ();				# ssh faults storage
