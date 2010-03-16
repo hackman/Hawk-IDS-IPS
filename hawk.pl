@@ -44,7 +44,6 @@ my $debug = 1;						# by default debuging is OFF
 my $do_limit = 0;					# by default do not limit the offending IPs
 my $start_time = time();
 
-my $fw_time = $start_time;
 my $hostname = '';
 my %service_codes = split(/[:\s]/, $config{'service_ids'});
 
