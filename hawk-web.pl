@@ -153,10 +153,10 @@ if ($action eq 'listfailed') {
 	$get_broots->execute;
 	while (my ($date,$ip,$service) = $get_broots->fetchrow_array) {
 		my $line = $line0;
-		my $service_num = get_service_num($service);
+		my $service_name = get_num_service($service);
 		$line =~ s/__DATE__/$date/;		
 		$line =~ s/__IP__/$ip/g;		
-		$line =~ s/__SERVICE__/$service_num\'>$service/;
+		$line =~ s/__SERVICE__/$service\'>$service_name/;
 		$lines .= $line;
 	}
 	$table =~ s/__CONTENTS__/$lines/;
