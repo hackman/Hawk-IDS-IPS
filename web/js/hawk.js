@@ -59,6 +59,7 @@ Ext.onReady(function () {
 		frame: true,
 		width: 210,
 		autoHeight:true,
+		monitorValid: true,
 		items: [
 			new Ext.form.NumberField({
 				width: 40,
@@ -125,14 +126,17 @@ Ext.onReady(function () {
 			text: "Save",
 			formBind:true,
 			handler: function() {
-		  			if ( !Ext.getCmp('max_blocked_i').isValid() )
-			  			alert('Queue: '+Ext.getCmp('max_blocked_i').getValue());
-		  			else
+					if ( Ext.getCmp('max_brutes_i').getValue() < Ext.getCmp('min_brutes_i').getValue() ||
+						Ext.getCmp('max_failed_i').getValue() < Ext.getCmp('min_failed_i').getValue() ||
+						Ext.getCmp('max_blocked_i').getValue() < Ext.getCmp('min_blocked_i').getValue()) {
+							Ext.Msg.alert('Min values must be less than the corresponding max values');
+					}
+					else {
 						mySettings.hide();
+					}
 				}
 			},{
 			text: "Close",
-			formBind:true,
 			handler: function() {
 					mySettings.hide();
 				}
