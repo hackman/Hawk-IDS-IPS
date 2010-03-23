@@ -5,6 +5,8 @@ config = {
 	max_failed_i: 11,
 	min_blocked_i: 11,
 	max_blocked_i: 11,
+	chartLineSize: 1,
+	chartDotSize: 5,
 }
 
 var validated = false;
@@ -20,18 +22,15 @@ Ext.apply(Ext.form.VTypes, {
 			this.minMaxNumberText = 'This field must contain a positive integer.';
 			return false;
 		}
-		var name = field.getName();
 		var other;
-		if (/^min/.test(name)) {
-			name = name.replace('min', 'max');
-			other = Ext.getCmp(name);
+		if (/^min/.test(field.getName())) {
+			other = Ext.getCmp(field.getName().replace('min', 'max'));
 			if (other.getValue() < value) {
 				this.minMaxNumberText = 'This field must contain a smaller value than the corresponding max field.';
 				return false;
 			}
 		} else {
-			name = name.replace('max', 'min');
-			other = Ext.getCmp(name);
+			other = Ext.getCmp(field.getName().replace('max', 'min'));
 			if (other.getValue() > value) {
 				this.minMaxNumberText = 'This field must contain a larger value than the corresponding min field.';
 				return false;
@@ -39,7 +38,7 @@ Ext.apply(Ext.form.VTypes, {
 		}
 		if (!validated) {
 			validated = true;
-			Ext.getCmp(name).validate();
+			other.validate();
 		} else {
 			validated = false;
 		}
@@ -86,21 +85,27 @@ Ext.onReady(function () {
 						displayName: 'bruteforce attempts',
 						yField: 'brutes',
 						style: {
-							color:0xff0000
+							color:0xff0000,
+							size: config.chartDotSize,
+							lineSize: config.chartLineSize,
 						}
 					},{
 						type:'line',
 						displayName: 'failed attempts',
 						yField: 'failed',
 						style: {
-							color: 0x00ff00
+							color: 0x00ff00,
+							size: config.chartDotSize,
+							lineSize: config.chartLineSize,
 						}
 					},{
 						type:'line',
 						displayName: 'blocked ip addresses',
 						yField: 'blocked',
 						style: {
-							color: 0x0000ff
+							color: 0x0000ff,
+							size: config.chartDotSize,
+							lineSize: config.chartLineSize,
 						}
 					}]
 			})
