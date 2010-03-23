@@ -1,0 +1,25 @@
+body {
+	margin: 0px 0px 0px 0px;
+	padding: 0px 0px 0px 0px;
+}
+
+#header {
+	height: 70px;
+	width: 100%;
+	top: 0px;
+	border-bottom: 1px solid black;
+	background: #BDD7F2;
+}
+
+#footer {
+	position: fixed;
+	width: 100%;
+	bottom: 0px;
+	border-top: 1px solid black;
+	background: #BDD7F2;
+	height: 50px;
+}
+
+#main {
+	text-align: center;
+}
