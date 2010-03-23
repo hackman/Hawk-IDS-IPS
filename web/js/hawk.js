@@ -65,8 +65,8 @@ Ext.onReady(function () {
 		charts.push( new Ext.Panel({
 			title: 'servername' + i,
 			bodyBorder: false,
-			height: '220px',
-			width: '440px',
+//			height: 220,
+//			width: 440,
 			style: {
 				float: 'left',
 				'margin-top': 20,
@@ -208,25 +208,23 @@ Ext.onReady(function () {
 
 	var mainPanel = new Ext.Panel({
 		id:'main-panel',
+		title: 'aaa',
 		width: 944,
-		layout: 'fit',
+		height: 610,
 		renderTo: 'main',
 		style: {
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
 		},
-		items: [ {
-				title: 'aaa',
-				items: charts,
-				height: 574,
-				tools:[{
-						id:'gear',
-						handler: function(){
-							mySettings.show();
-						}
-					}],
-			},{
+		tools:[{
+				id:'gear',
+				handler: function(){
+					mySettings.show();
+				}
+			}],
+		items: charts,
+		bbar:{
 				xtype: 'paging',
 				store: null,
 				pageSize: 25,
@@ -241,6 +239,6 @@ Ext.onReady(function () {
 						text: 'Show all',
 						toggleHandler: null//function(btn, pressed){var view = grid.getView();view.showPreview = pressed;view.refresh();}
 					}]
-			}],
+			},
 		});
 });
