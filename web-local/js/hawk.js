@@ -1,12 +1,24 @@
 Ext.chart.Chart.CHART_URL = 'ext-3.1.1/resources/charts.swf';
 
 var charts = new Array();
+var summary_grid = new Array();
 
 Ext.onReady(function(){
 	var serv_data = [
 		[20, 5, 13, 8, 21, 56]
 	];
-
+	var summary = [
+		['125.65.7.3', '28'],
+		['24.42.33.11', '4'],
+		['24.99.104.193', '67'],
+		['58.181.108.157', '32'],
+		['67.235.226.74', '3'],
+		['70.26.185.43', '44'],
+		['71.118.16.242', '12'],
+		['72.55.137.101', '3'],
+		['74.55.182.98', '6'],
+		['74.162.17.73', '81']
+	];
 	var charts_store = new Ext.data.JsonStore({
 		fields:['hour', 'brutes', 'failed', 'blocked'],
 		data: [
@@ -38,7 +50,7 @@ Ext.onReady(function(){
 	});
 	
 	charts[0] = new Ext.Panel({
-		title: 'Bruteforce attempts statistics',
+		title: '<a href="hawk-brute.html">Bruteforce attempts statistics</a>',
 		width:440,
 		height:220,
 		style: {
@@ -54,7 +66,7 @@ Ext.onReady(function(){
 	});
 	
 	charts[1] = new Ext.Panel({
-		title: 'Failed login attempts',
+		title: '<a href="hawk-failed.html">Failed login attempts</a>',
 		width:440,
 		height:220,
 		style: {
@@ -122,20 +134,79 @@ Ext.onReady(function(){
 
 	brute_grid.render('main');
 	
-//	var BrutesPanel = new Ext.Panel({
-//		id:'brutes-panel',
-//		width: 905,
-//		height: 260,
-//		layout: 'fit',
-//		renderTo: 'main',
-//		style: {
-//			'margin-top': '10px',
-//			'margin-left': 'auto',
-//			'margin-right': 'auto',
-//		},
-//		items: [{
-//				title: 'Bruteforce attempts statistics per service',
-//				items: brute_grid
-//		}]
-//	});
+	var summary_store = new Ext.data.ArrayStore({
+		fields: [
+			{name: 'IP address'},
+			{name: 'Count'}
+		]
+	});
+
+	summary_store.loadData(summary);
+
+	summary_grid[0] = new Ext.grid.GridPanel({
+		store: summary_store,
+		columns: [
+			{header: 'IP address', width: 142},
+			{header: 'Count', width: 142}
+		],
+		width: 290,
+		height: 265,
+		//layout: 'fit',
+		style: {
+			float: 'left',
+			'margin': 5
+		},
+		title: '1 Hour summary',      
+	});
+
+	summary_grid[1] = new Ext.grid.GridPanel({
+		store: summary_store,
+		columns: [
+			{header: 'IP address', width: 142},
+			{header: 'Count', width: 142}
+		],
+		width: 290,
+		height: 265,
+		//layout: 'fit',
+		style: {
+			float: 'left',
+			'margin': 5
+		},
+		title: 'Daily summary',      
+	});
+
+	summary_grid[2] = new Ext.grid.GridPanel({
+		store: summary_store,
+		columns: [
+			{header: 'IP address', width: 142},
+			{header: 'Count', width: 142}
+		],
+		width: 290,
+		height: 265,
+		//layout: 'fit',
+		style: {
+			float: 'left',
+			'margin': 5
+		},
+		title: 'Weekly summary',      
+	});
+
+	var summaryPanel = new Ext.Panel({
+		id:'summary-panel',
+		width: 905,
+		height: 305,
+		layout: 'fit',
+		renderTo: 'main',
+		style: {
+			'margin-top': '10px',
+			'margin-left': 'auto',
+			'margin-right': 'auto',
+			'margin-bottom': '10px',
+		},
+		items: [{
+				title: 'Summary report',
+				items: summary_grid
+		}]
+	});
+	
 });
