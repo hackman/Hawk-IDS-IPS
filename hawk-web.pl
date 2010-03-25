@@ -15,7 +15,7 @@ import parse_config;
 
 # system variables
 $ENV{PATH} = '';					# remove unsecure path
-my $VERSION = '2.0.1';				# version string
+my $VERSION = '2.0.2';				# version string
 
 my $conf = '/home/sentry/hackman/hawk-web.conf';
 # make DB vars
@@ -377,7 +377,7 @@ function sort(val) {
 	my $blacklisted_1h_removed = $conn->selectrow_array("SELECT 
 		COUNT(id) AS count 
 		FROM blacklist 
-		WHERE date_add > (now() - interval '1 hour') AND date_rem IS NOT NULL");
+		WHERE date_rem IS NOT NULL AND date_rem > (now() - interval '1 hour')");
  	my @blacklisted_days_active0 = $conn->selectrow_array("SELECT 
  		COUNT(id) AS count 
  		FROM blacklist 
