@@ -1,10 +1,10 @@
 config = {
-	min_brutes_i: 11,
-	max_brutes_i: 11,
-	min_failed_i: 11,
-	max_failed_i: 11,
-	min_blocked_i: 11,
-	max_blocked_i: 11,
+	min_brutes_i: 0,
+	max_brutes_i: 2000000000,
+	min_failed_i: 0,
+	max_failed_i: 2000000000,
+	min_blocked_i: 0,
+	max_blocked_i: 2000000000,
 	chartLineSize: 1,
 	chartDotSize: 5,
 }
@@ -54,25 +54,38 @@ Ext.onReady(function () {
 	var stores = new Array();
 	var charts = new Array();
 
-	var bigStore = new Ext.data.Store({
-		proxy: new Ext.data.HttpProxy({
-			url: '../cgi-bin/test.pl'
-		}),
-
-		reader: new Ext.data.JsonReader({
-						root: 'servers',
-						totalProperty: 'total',
-						propertyId: 'num',
-					}, [
-						{name: 'chartData', mapping: 'data'},
-						{name: 'serverName', mapping: 'name'},
-					]),
+	bigStore = new Ext.data.JsonStore({
+		url: '../cgi-bin/master.pl',
+		baseParams: {
+			txt: 1,
+		//	debug: 1,
+			min_brutes: config['min_brutes_i'],
+			max_brutes: config['max_brutes_i'],
+			min_failed: config['min_failed_i'],
+			max_failed: config['max_failed_i'],
+			min_blocked: config['min_blocked_i'],
+			max_blocked: config['max_blocked_i'],
+		},
+		root: 'servers',
+		totalProperty: 'total',
+		propertyId: 'num',
+		fields: [
+			{name: 'chartData', mapping: 'data'},
+			{name: 'serverName', mapping: 'name'},
+		],
 		listeners: {
 			load: function() {
-				for (var i=0; i < 4; i++) {
+				var i;
+				console.log("Count: ", bigStore.getCount());
+				for (i=0; i < bigStore.getCount(); i++) {
+					charts[i].show();
 					stores[i].loadData(bigStore.getAt(i).data.chartData);
 					charts[i].setTitle('<a href="http://' + bigStore.getAt(i).data.serverName +
 						'/~sentry/cgi-bin/hawk-web.pl">' + bigStore.getAt(i).data.serverName + '</a>');
+				}
+				for (; i < 4; i++) {
+					charts[i].setTitle('');
+					charts[i].hide();
 				}
 			}
 		}
@@ -83,7 +96,6 @@ Ext.onReady(function () {
 		stores.push(new Ext.data.JsonStore({
 			fields: ['hour', 'brutes', 'failed', 'blocked'],
 		}));
-
 
 		charts.push( new Ext.Panel({
 			title: 'servername' + i,
@@ -96,6 +108,7 @@ Ext.onReady(function () {
 				'margin-right': i%2 == 0 ? 0 : 20,
 			},
 			items: 	new Ext.chart.LineChart({
+				plugins: [new Ext.ux.plugin.VisibilityMode()],
 				store: stores[i],
 				url:'ext-3.1.1/resources/charts.swf',
 				xField: 'hour',
@@ -197,21 +210,25 @@ Ext.onReady(function () {
 			],
 		buttons: [{
 			text: "Save",
-			formBind:true,
+			formBind: true,
 			handler: function() {
-					if ( Ext.getCmp('max_brutes_i').getValue() < Ext.getCmp('min_brutes_i').getValue() ||
-						Ext.getCmp('max_failed_i').getValue() < Ext.getCmp('min_failed_i').getValue() ||
-						Ext.getCmp('max_blocked_i').getValue() < Ext.getCmp('min_blocked_i').getValue()) {
-							Ext.Msg.alert('Min values must be less than the corresponding max values');
-					}
-					else {
+						bigStore.baseParams.max_brutes = Number(Ext.getCmp('max_brutes_i').getValue());
+						bigStore.baseParams.min_brutes = Number(Ext.getCmp('min_brutes_i').getValue());
+						bigStore.baseParams.max_failed = Number(Ext.getCmp('max_failed_i').getValue());
+						bigStore.baseParams.min_failed = Number(Ext.getCmp('min_failed_i').getValue());
+						bigStore.baseParams.max_blocked = Number(Ext.getCmp('max_blocked_i').getValue());
+						bigStore.baseParams.min_blocked = Number(Ext.getCmp('min_blocked_i').getValue());
 						mySettings.hide();
-					}
 				}
 			},{
 			text: "Close",
 			handler: function() {
-					// clear the data
+					config.max_brutes = bigStore.baseParams.max_brutes;
+					config.min_brutes = bigStore.baseParams.min_brutes;
+					config.max_failed = bigStore.baseParams.max_failed;
+					config.min_failed = bigStore.baseParams.min_failed;
+					config.max_blocked = bigStore.baseParams.max_blocked;
+					config.min_blocked = bigStore.baseParams.min_blocked;
 					mySettings.hide();
 				}
 			}]
