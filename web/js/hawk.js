@@ -284,6 +284,7 @@ Ext.onReady(function () {
 				renderTo: mainPanel,
 				items:[
 					'-', {
+						id: 'showall',
 						pressed: false,
 		 				enableToggle: true,
 						text: 'Show all',
@@ -309,17 +310,14 @@ Ext.onReady(function () {
 						trigger1Class: 'x-form-search-trigger',
 						trigger2Class: 'x-form-clear-trigger',
 						onTrigger1Click: function(){
-							var ipaddr = Ext.getCmp('ipaddr').getValue();
-	//						ShowResults(ipaddr);
-							for (var i=1;i<=3;i++) {
-								charts[i].hide();
-							}
+							Ext.getCmp('showall').disable();
+							bigStore.baseParams['server'] = this.getValue();
+							bigStore.load({params: {start:0, limit: 4} });
 						},
 						onTrigger2Click: function(){
-							var ipaddr = Ext.getCmp('ipaddr').setValue('');
-							for (var i=1;i<=3;i++) {
-								charts[i].show();
-							}
+							Ext.getCmp('showall').disable();
+							delete bigStore.baseParams['server'];
+							bigStore.load({params: {start:0, limit: 4} });
 						}
 					}),
 				],
