@@ -16,10 +16,6 @@ var parameter_names = new Array('min_brutes', 'max_brutes', 'min_failed', 'max_f
 //they can be reloaded after it is released
 var saved_params = new Object();
 
-//global variable for the validation
-//TODO: try moving it into the VTypes class
-var validated = false;
-
 Ext.apply(Ext.form.VTypes, {
 	minMaxNumber: function(value, field) {
 		if (value == '' || value == null) {
@@ -45,15 +41,16 @@ Ext.apply(Ext.form.VTypes, {
 				return false;
 			}
 		}
-		if (!validated) {
-			validated = true;
+		if (!this.validatedOpposite) {
+			this.validatedOpposite = true;
 			other.validate();
 		} else {
-			validated = false;
+			this.validatedOpposite = false;
 		}
 		return true;
 	},
 	minMaxNumberText: 'The field must contain a positive number, greater than or equal to the corresponding min value or less than or equal to the correspondong max value.',
+	validatedOpposite: false,
 });
 
 Ext.onReady(function () {
@@ -280,7 +277,7 @@ Ext.onReady(function () {
 				pageSize: 4,
 				displayInfo: true,
 				displayMsg: 'Displaying info for servers {0} - {1} of {2}',
-				emptyMsg: "No topics to display",
+				emptyMsg: "No servers match the search criteria",
 				renderTo: mainPanel,
 				items:[
 					'-', {
@@ -315,7 +312,9 @@ Ext.onReady(function () {
 							bigStore.load({params: {start:0, limit: 4} });
 						},
 						onTrigger2Click: function(){
+							this.setValue('');
 							Ext.getCmp('showall').enable();
+							Ext.getCmp('showall').focus();
 							delete bigStore.baseParams['server'];
 							bigStore.load({params: {start:0, limit: 4} });
 						}
