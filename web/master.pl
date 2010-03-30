@@ -10,7 +10,7 @@ use parse_config;
 use db_utils;
 use web_error;
 
-my $VERSION = '0.1.2';
+my $VERSION = '0.1.3';
 my $conf_file = '/home/dvd/projects/hawk-commercial/web/web.conf';
 my %config = parse_config($conf_file);
 
@@ -55,7 +55,8 @@ my $get_server_info = '
 	FROM
 		hourly_info
 	WHERE
-		server = ?
+		server = ? AND
+		date > now() - interval \'24 hours\'
 ';
 
 $|=1;
