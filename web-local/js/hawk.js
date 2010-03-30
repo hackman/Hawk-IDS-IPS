@@ -6,13 +6,95 @@ config = {
 	chartDotSize: 5,
 }
 
-var ResultsWin;
+function Show_Brutes() {
+	var brutes_store = new Ext.data.JsonStore({
+		autoLoad: true,
+		url: '../cgi-bin/jivko/hawk.pl',
+		baseParams: {
+			id: '4'
+		},
+		fields: [
+			{name: 'date', mapping: 0},
+			{name: 'ip', mapping: 1},
+			{name: 'service', mapping: 2}
+		]
+	});
+
+	var brutes_grid = new Ext.grid.GridPanel({
+		store: brutes_store,
+		columns: [
+			{header: 'Date', width: 250},
+			{header: 'IP address', width: 250},
+			{header: 'Service', width: 250}
+		],
+		width: 750,
+		height: 400,
+		layout: 'fit',
+		style: {
+			'margin-top': '10px',
+			'margin-left': 'auto',
+			'margin-right': 'auto',
+		}
+	});
+	
+		var BrutesWin = new Ext.Window({
+			width:800,
+			height:400,
+			shadow: true,
+			id: 'results',
+			title: 'Bruteforce attempts (24 hrs only)',
+			resizable: false,
+			items: brutes_grid
+		});
+	BrutesWin.show();
+}
+
+function Show_Failed() {
+	var failed_store = new Ext.data.JsonStore({
+		autoLoad: true,
+		url: '../cgi-bin/jivko/hawk.pl',
+		baseParams: {
+			id: '5'
+		},
+		fields: [
+			{name: 'date', mapping: 0},
+			{name: 'ip', mapping: 1},
+			{name: 'service', mapping: 2},
+			{name: 'username', mapping: 3}
+		]
+	});
+
+	var failed_grid = new Ext.grid.GridPanel({
+		store: failed_store,
+		columns: [
+			{header: 'Date', width: 195},
+			{header: 'IP address', width: 195},
+			{header: 'Service', width: 195},
+			{header: 'Username', width: 195}
+		],
+		width: 750,
+		height: 400,
+		layout: 'fit',
+		style: {
+			'margin-top': '10px',
+			'margin-left': 'auto',
+			'margin-right': 'auto',
+		}
+	});
+	
+	var FailedWin = new Ext.Window({
+		width:800,
+		height:400,
+		shadow: true,
+		id: 'results',
+		title: 'Failed attempts (24 hrs only)',
+		resizable: false,
+		items: failed_grid
+	});
+	FailedWin.show();
+}
 
 function ShowResults(ipaddr) {
-	var search_data = [
-		['2010-03-20 05:28:30','74.162.17.73']
-	];
-
 	var charts_store = new Ext.data.JsonStore({
 		fields:['hour', 'brutes', 'failed', 'blocked'],
 		data: [
@@ -42,77 +124,85 @@ function ShowResults(ipaddr) {
 			{hour:'07:00', brutes:3133, failed:2309, blocked:1353}
 		]
 	});
-
-	var search_store = new Ext.data.ArrayStore({
-		fields: [
-			{name: 'Date'},
-			{name: 'IP address'},
-			{name: 'Action'},
-		]
-	});
-
-	search_store.loadData(search_data);
-
-	var UnblockBtn = new Ext.Button({
-		text: 'Unblock',
-		handler: function() {
-			alert("Ko stana");
+	
+	var search_store = new Ext.data.JsonStore({
+		autoLoad: true,
+		url: '../cgi-bin/jivko/hawk.pl',
+		baseParams: {
+			id: '6',
+			ip: ipaddr
 		},
-		id: 'unblock'
+		fields: [
+			{name: 'date_added', mapping: 0},
+			{name: 'date_removed', mapping: 1},
+			{name: 'ip', mapping: 2},
+			{name: 'reason', mapping: 3},
+		]
 	});
 
 	var search_grid = new Ext.grid.GridPanel({
 		store: search_store,
 		columns: [
-			{header: 'Date', width: 205},
-			{header: 'IP address', width: 205},
-			{header: 'Action', width: 205, renderer: function(value, metaData, record, rowIndex, colIndex, store){ return '<a href="#" onclick="alert(record)">Unblock</a>';}}
+			{header: 'Date added', width: 125},
+			{header: 'Date removed', width: 125},
+			{header: 'IP address', width: 100},
+			{header: 'Reason', width: 400},
+			//{header: 'Action', width: 205, renderer: function(value, metaData, record, rowIndex, colIndex, store){ return '<a href="#" onclick="alert(record)">Unblock</a>';}}
 		],
-		width: 905,
+		width: 800,
 		height: 50,
 		layout: 'fit',
-		//renderTo: 'main',
 		style: {
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
 		},
-		//title: 'Blocked IP adresses',      
 	});
 	
 	var chart = new Ext.Panel({
-		title: 'Blocked IP address statistics',
+		title: 'Brute/Failed attempts statistics',
 		width:440,
 		height:220,
 		style: {
 			float: 'left',
 			'margin': 5,
 		},
-		items: {
-			xtype: 'columnchart',
+		items:  new Ext.chart.LineChart({
 			store: charts_store,
 			xField: 'hour',
-			yField: 'brutes'
-		},
-		style: {
-			'margin-top': '10px',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
-		},
-		//renderTo: 'main'
+			//height: '220px',
+			//width: '438px',
+			series: [{
+				type: 'column',
+				displayName: 'bruteforce attempts',
+				yField: 'brutes',
+				style: {
+					color:0xff0000,
+					size: config.chartDotSize,
+					lineSize: config.chartLineSize,
+				}
+			},{
+				type:'column',
+				displayName: 'failed attempts',
+				yField: 'failed',
+				style: {
+					color: 0x00ff00,
+					size: config.chartDotSize,
+					lineSize: config.chartLineSize,
+				}
+			}],
+        })
 	});
-	if (!ResultsWin) {
-		ResultsWin = new Ext.Window({
-			width:600,
-			height:350,
-			shadow: true,
-			id: 'results',
-			title:"Results",
-			closeAction: 'hide',
-			resizable: false,
-			items: [ search_grid, chart ]
-		});
-	}
+	
+	var ResultsWin = new Ext.Window({
+		width:800,
+		height:400,
+		shadow: true,
+		id: 'results',
+		title:"Results",
+		resizable: false,
+		items: [ search_grid, chart ]
+	});
 	ResultsWin.show();	
 }
 
@@ -121,8 +211,8 @@ Ext.onReady(function(){
 	var charts_store;
 	var chartsObj = new Object({
 		options: [
-			{title: '<a href="hawk-brute.html">Bruteforce attempts statistics</a>', type: 'broots', name: 'bruteforce attempts', color: '0xff0000'},
-			{title: '<a href="hawk-failed.html">Failed login attempts</a>', type: 'failed_log', name: 'failed attempts', color: '0x0000ff'}
+			{title: '<a href="javascript:void(0);" onclick="Show_Brutes()">Bruteforce attempts statistics</a>', type: 'broots', name: 'bruteforce attempts', color: '0xff0000'},
+			{title: '<a href="javascript:void(0);" onclick="Show_Failed()">Failed login attempts</a>', type: 'failed_log', name: 'failed attempts', color: '0x0000ff'}
 		]
 	});
 	
@@ -279,8 +369,8 @@ Ext.onReady(function(){
 		summary_grid.push(new Ext.grid.GridPanel({
 				store: summary_store,
 				columns: [
-					{header: 'IP address', sortable: true, width: 142, dataIndex: 'ip'},
-					{header: 'Count', sortable: true, width: 142, dataIndex: 'count'}
+					{header: 'IP address', sortable: true, width: 135, dataIndex: 'ip'},
+					{header: 'Count', sortable: true, width: 135, dataIndex: 'count'}
 				],
 				width: 290,
 				height: 265,
