@@ -1,14 +1,23 @@
-config = {
-	min_brutes_i: 0,
-	max_brutes_i: 2000000000,
-	min_failed_i: 0,
-	max_failed_i: 2000000000,
-	min_blocked_i: 0,
-	max_blocked_i: 2000000000,
+var config = {
+	min_brutes: 0,
+	max_brutes: 2000000000,
+	min_failed: 0,
+	max_failed: 2000000000,
+	min_blocked: 0,
+	max_blocked: 2000000000,
 	chartLineSize: 1,
 	chartDotSize: 5,
 }
 
+// The names of the parameters we use
+var parameter_names = new Array('min_brutes', 'max_brutes', 'min_failed', 'max_failed', 'min_blocked', 'max_blocked');
+
+//this object stores the parameters while the Show all button is pressed
+//they can be reloaded after it is released
+var saved_params = new Object();
+
+//global variable for the validation
+//TODO: try moving it into the VTypes class
 var validated = false;
 
 Ext.apply(Ext.form.VTypes, {
@@ -59,12 +68,12 @@ Ext.onReady(function () {
 		baseParams: {
 			txt: 1,
 		//	debug: 1,
-			min_brutes: config['min_brutes_i'],
-			max_brutes: config['max_brutes_i'],
-			min_failed: config['min_failed_i'],
-			max_failed: config['max_failed_i'],
-			min_blocked: config['min_blocked_i'],
-			max_blocked: config['max_blocked_i'],
+			min_brutes: config['min_brutes'],
+			max_brutes: config['max_brutes'],
+			min_failed: config['min_failed'],
+			max_failed: config['max_failed'],
+			min_blocked: config['min_blocked'],
+			max_blocked: config['max_blocked'],
 		},
 		root: 'servers',
 		totalProperty: 'total',
@@ -76,74 +85,82 @@ Ext.onReady(function () {
 		listeners: {
 			load: function() {
 				var i;
-				console.log("Count: ", bigStore.getCount());
+				showCharts(bigStore.getCount());
 				for (i=0; i < bigStore.getCount(); i++) {
-					charts[i].show();
 					stores[i].loadData(bigStore.getAt(i).data.chartData);
 					charts[i].setTitle('<a href="http://' + bigStore.getAt(i).data.serverName +
 						'/~sentry/cgi-bin/hawk-web.pl">' + bigStore.getAt(i).data.serverName + '</a>');
 				}
-				for (; i < 4; i++) {
-					charts[i].setTitle('');
-					charts[i].hide();
-				}
+				hideCharts(bigStore.getCount());
 			}
 		}
 	});
 
-	for (var i=0;i<4;i++) {
+	//Hides charts.
+	//showing_count is the number of graphics to be shown
+	//after the function has completed.
+	function hideCharts(showing_count) {
+		while (charts.length > showing_count) {
+			charts.pop().destroy();
+			stores.pop().destroy();
+		}
+	}
 
-		stores.push(new Ext.data.JsonStore({
-			fields: ['hour', 'brutes', 'failed', 'blocked'],
-		}));
+	function showCharts(count) {
+		for (var i = charts.length; i < count; i++) {
+			stores.push(new Ext.data.JsonStore({
+				fields: ['hour', 'brutes', 'failed', 'blocked'],
+			}));
 
-		charts.push( new Ext.Panel({
-			title: 'servername' + i,
-			bodyBorder: false,
-			style: {
-				float: 'left',
-				'margin-top': 20,
-				'margin-left': 20,
-				'margin-bottom': i <= 1 ? 0 : 20,
-				'margin-right': i%2 == 0 ? 0 : 20,
-			},
-			items: 	new Ext.chart.LineChart({
-				plugins: [new Ext.ux.plugin.VisibilityMode()],
-				store: stores[i],
-				url:'ext-3.1.1/resources/charts.swf',
-				xField: 'hour',
-				height: '220px',
-				width: '438px',
-				series: [{
-						type: 'line',
-						displayName: 'bruteforce attempts',
-						yField: 'brutes',
-						style: {
-							color:0xff0000,
-							size: config.chartDotSize,
-							lineSize: config.chartLineSize,
-						}
-					},{
-						type:'line',
-						displayName: 'failed attempts',
-						yField: 'failed',
-						style: {
-							color: 0x00ff00,
-							size: config.chartDotSize,
-							lineSize: config.chartLineSize,
-						}
-					},{
-						type:'line',
-						displayName: 'blocked ip addresses',
-						yField: 'blocked',
-						style: {
-							color: 0x0000ff,
-							size: config.chartDotSize,
-							lineSize: config.chartLineSize,
-						}
-					}],
-			})
-		}));
+			charts.push( new Ext.Panel({
+				title: 'servername' + i,
+				bodyBorder: false,
+				style: {
+					float: 'left',
+					'margin-top': 20,
+					'margin-left': 20,
+					'margin-bottom': i <= 1 ? 0 : 20,
+					'margin-right': i%2 == 0 ? 0 : 20,
+				},
+				items: 	new Ext.chart.LineChart({
+					store: stores[i],
+					url:'ext-3.1.1/resources/charts.swf',
+					xField: 'hour',
+					height: '220px',
+					width: '438px',
+					series: [{
+							type: 'line',
+							displayName: 'bruteforce attempts',
+							yField: 'brutes',
+							style: {
+								color:0xff0000,
+								size: config.chartDotSize,
+								lineSize: config.chartLineSize,
+							}
+						},{
+							type:'line',
+							displayName: 'failed attempts',
+							yField: 'failed',
+							style: {
+								color: 0x00ff00,
+								size: config.chartDotSize,
+								lineSize: config.chartLineSize,
+							}
+						},{
+							type:'line',
+							displayName: 'blocked ip addresses',
+							yField: 'blocked',
+							style: {
+								color: 0x0000ff,
+								size: config.chartDotSize,
+								lineSize: config.chartLineSize,
+							}
+						}],
+				})
+			}));
+			Ext.getCmp('main-panel').add(charts[i]);
+		}
+		Ext.getCmp('main-panel').doLayout();
 	}
 
 	var settings_form = new Ext.FormPanel({
@@ -159,7 +176,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel: 'Min bruteforce attempts',
 				allowBlank: false,
-				value: config['min_brutes_i'],//min_bruteforce,
+				value: config['min_brutes'],//min_bruteforce,
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -168,7 +185,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel: 'Max bruteforce attempts',
 				allowBlank: false,
-				value: config['max_brutes_i'],//max_bruteforce,
+				value: config['max_brutes'],//max_bruteforce,
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -177,7 +194,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel:'Min failed attempts',
 				allowBlank: false,
-				value: config['min_failed_i'],//min_failed,
+				value: config['min_failed'],//min_failed,
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -186,7 +203,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel:'Max failed attempts',
 				allowBlank: false,
-				value: config['max_failed_i'],//max_failed,
+				value: config['max_failed'],//max_failed,
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -195,7 +212,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel:'Min blocked IP addresses',
 				allowBlank:false,
-				value: config['min_blocked_i'],//min_blocked,
+				value: config['min_blocked'],//min_blocked,
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -204,7 +221,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel:'Max blocked IP addresses',
 				allowBlank:false,
-				value: config['max_blocked_i'],//max_blocked,
+				value: config['max_blocked'],//max_blocked,
 				vtype:'minMaxNumber',
 			}),
 			],
@@ -212,23 +229,18 @@ Ext.onReady(function () {
 			text: "Save",
 			formBind: true,
 			handler: function() {
-						bigStore.baseParams.max_brutes = Number(Ext.getCmp('max_brutes_i').getValue());
-						bigStore.baseParams.min_brutes = Number(Ext.getCmp('min_brutes_i').getValue());
-						bigStore.baseParams.max_failed = Number(Ext.getCmp('max_failed_i').getValue());
-						bigStore.baseParams.min_failed = Number(Ext.getCmp('min_failed_i').getValue());
-						bigStore.baseParams.max_blocked = Number(Ext.getCmp('max_blocked_i').getValue());
-						bigStore.baseParams.min_blocked = Number(Ext.getCmp('min_blocked_i').getValue());
+						for (var i = 0; i < parameter_names.length; i++) {
+							bigStore.baseParams[parameter_names[i]] = Number(Ext.getCmp(parameter_names[i] + '_i').getValue());
+						}
+						bigStore.load({params: {start:0, limit: 4} });
 						mySettings.hide();
 				}
 			},{
 			text: "Close",
 			handler: function() {
-					config.max_brutes = bigStore.baseParams.max_brutes;
-					config.min_brutes = bigStore.baseParams.min_brutes;
-					config.max_failed = bigStore.baseParams.max_failed;
-					config.min_failed = bigStore.baseParams.min_failed;
-					config.max_blocked = bigStore.baseParams.max_blocked;
-					config.min_blocked = bigStore.baseParams.min_blocked;
+					for (var i = 0; i < parameter_names.length; i++) {
+						config[parameter_names[i]] = bigStore.baseParams[parameter_names[i]];
+					}
 					mySettings.hide();
 				}
 			}]
@@ -261,7 +273,6 @@ Ext.onReady(function () {
 					mySettings.show();
 				}
 			}],
-		items: charts,
 		bbar:{
 				xtype: 'paging',
 				id: 'pager',
@@ -276,7 +287,20 @@ Ext.onReady(function () {
 						pressed: false,
 		 				enableToggle: true,
 						text: 'Show all',
-						toggleHandler: null//function(btn, pressed){var view = grid.getView();view.showPreview = pressed;view.refresh();}
+						toggleHandler: function(btn, pressed) {
+							if (pressed) {
+								for (var i = 0; i < parameter_names.length; i++) {
+									saved_params[parameter_names[i]] = bigStore.baseParams[parameter_names[i]];
+									delete bigStore.baseParams[parameter_names[i]];
+								}
+							} else {
+								for (var i = 0; i < parameter_names.length; i++) {
+									bigStore.baseParams[parameter_names[i]] = saved_params[parameter_names[i]];
+									delete saved_params[parameter_names[i]];
+								}
+							}
+							bigStore.load({params: {start:0, limit: 4} });
+						}
 					}, '-', '->', '-', '<label for="ipaddr">Search: </label>',
 					new Ext.form.TwinTriggerField({
 						id: 'ipaddr',
@@ -301,5 +325,6 @@ Ext.onReady(function () {
 				],
 			},
 		});
+	showCharts(4);
 	bigStore.load({params: {start:0, limit: 4} });
 });
