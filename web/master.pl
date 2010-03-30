@@ -10,7 +10,7 @@ use parse_config;
 use db_utils;
 use web_error;
 
-my $VERSION = '0.0.1'
+my $VERSION = '0.0.2';
 my $conf_file = '/home/dvd/projects/hawk-commercial/web/web.conf';
 my %config = parse_config($conf_file);
 
@@ -18,18 +18,14 @@ my $get_server_names = '
 	SELECT
 		server
 	FROM
-		hourly_info
+		daily_min_max_values
 	WHERE
-		date > now() - \'24 hours\'::interval
-	GROUP BY
-		server
-	HAVING
-		min(failed) >= ? AND
-		max(failed) <= ? AND
-		min(brutes) >= ? AND
-		max(brutes) <= ? AND
-		min(blocked) >= ? AND
-		max(blocked) <= ?
+		min_failed >= ? AND
+		max_failed <= ? AND
+		min_brutes >= ? AND
+		max_brutes <= ? AND
+		min_blocked >= ? AND
+		max_blocked <= ?
 	ORDER BY
 		server ASC
 	LIMIT %s
@@ -40,18 +36,14 @@ my $get_server_count = '
 	SELECT
 		count(server)
 	FROM
-		hourly_info
+		daily_min_max_values
 	WHERE
-		date > now() - \'24 hours\'::interval
-	GROUP BY
-		server
-	HAVING
-		min(failed) >= ? AND
-		max(failed) <= ? AND
-		min(brutes) >= ? AND
-		max(brutes) <= ? AND
-		min(blocked) >= ? AND
-		max(blocked) <= ?
+		min_failed >= ? AND
+		max_failed <= ? AND
+		min_brutes >= ? AND
+		max_brutes <= ? AND
+		min_blocked >= ? AND
+		max_blocked <= ?
 ';
 
 my $get_server_info = '
@@ -102,6 +94,7 @@ if ($offset < 0 || $limit < 0) {
 	web_error("Wrong or missing start and limit parameters\n");
 }
 
+# some debugginig info
 print "After validation:
 
 min_failed = $min_failed
