@@ -315,7 +315,7 @@ Ext.onReady(function () {
 							bigStore.load({params: {start:0, limit: 4} });
 						},
 						onTrigger2Click: function(){
-							Ext.getCmp('showall').disable();
+							Ext.getCmp('showall').enable();
 							delete bigStore.baseParams['server'];
 							bigStore.load({params: {start:0, limit: 4} });
 						}
