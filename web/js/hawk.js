@@ -121,6 +121,11 @@ Ext.onReady(function () {
 					xField: 'hour',
 					height: '220px',
 					width: '438px',
+					extraStyle: {
+						legend: {
+							display: 'bottom',
+						},
+					},
 					series: [{
 							type: 'line',
 							displayName: 'bruteforce attempts',
@@ -169,7 +174,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel: 'Min bruteforce attempts',
 				allowBlank: false,
-				value: config['min_brutes'],//min_bruteforce,
+				value: config['min_brutes'],
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -178,7 +183,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel: 'Max bruteforce attempts',
 				allowBlank: false,
-				value: config['max_brutes'],//max_bruteforce,
+				value: config['max_brutes'],
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -187,7 +192,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel:'Min failed attempts',
 				allowBlank: false,
-				value: config['min_failed'],//min_failed,
+				value: config['min_failed'],
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -196,7 +201,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel:'Max failed attempts',
 				allowBlank: false,
-				value: config['max_failed'],//max_failed,
+				value: config['max_failed'],
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -205,7 +210,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel:'Min blocked IP addresses',
 				allowBlank:false,
-				value: config['min_blocked'],//min_blocked,
+				value: config['min_blocked'],
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
@@ -214,7 +219,7 @@ Ext.onReady(function () {
 				labelStyle: 'width:150px',
 				fieldLabel:'Max blocked IP addresses',
 				allowBlank:false,
-				value: config['max_blocked'],//max_blocked,
+				value: config['max_blocked'],
 				vtype:'minMaxNumber',
 			}),
 			],
@@ -296,10 +301,20 @@ Ext.onReady(function () {
 						name: 'server-name',
 						emptyText: 'Filter by server name',
 						triggerClass: 'x-form-search-trigger',
+						listeners : {
+							specialkey : function (field, event) {
+									if (Ext.EventObject.getKey(event) == event.ENTER) {
+									this.search(field.getValue());
+								};
+							},
+						},
 						onTriggerClick: function(){
+							this.search(field.getValue());
+						},
+						search: function(serverName) {
 							bigStore.baseParams['server'] = this.getValue();
 							bigStore.load({params: {start:0, limit: 4} });
-						},
+						}
 					}),
 				],
 			},
