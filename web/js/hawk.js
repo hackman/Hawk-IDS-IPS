@@ -12,10 +12,6 @@ var config = {
 // The names of the parameters we use
 var parameter_names = new Array('min_brutes', 'max_brutes', 'min_failed', 'max_failed', 'min_blocked', 'max_blocked');
 
-//this object stores the parameters while the Show all button is pressed
-//they can be reloaded after it is released
-var saved_params = new Object();
-
 Ext.apply(Ext.form.VTypes, {
 	minMaxNumber: function(value, field) {
 		if (value == '' || value == null) {
@@ -95,7 +91,7 @@ Ext.onReady(function () {
 
 	//Hides charts.
 	//showing_count is the number of graphics to be shown
-	//after the function has completed.
+	//after the functon has completed.
 	function hideCharts(showing_count) {
 		while (charts.length > showing_count) {
 			charts.pop().destroy();
@@ -229,6 +225,8 @@ Ext.onReady(function () {
 						for (var i = 0; i < parameter_names.length; i++) {
 							bigStore.baseParams[parameter_names[i]] = Number(Ext.getCmp(parameter_names[i] + '_i').getValue());
 						}
+						Ext.getCmp('server-name').setValue('');
+						delete bigStore.baseParams['server'];
 						bigStore.load({params: {start:0, limit: 4} });
 						mySettings.hide();
 				}
@@ -283,41 +281,25 @@ Ext.onReady(function () {
 					'-', {
 						id: 'showall',
 						pressed: false,
-		 				enableToggle: true,
 						text: 'Show all',
-						toggleHandler: function(btn, pressed) {
-							if (pressed) {
-								for (var i = 0; i < parameter_names.length; i++) {
-									saved_params[parameter_names[i]] = bigStore.baseParams[parameter_names[i]];
-									delete bigStore.baseParams[parameter_names[i]];
-								}
-							} else {
-								for (var i = 0; i < parameter_names.length; i++) {
-									bigStore.baseParams[parameter_names[i]] = saved_params[parameter_names[i]];
-									delete saved_params[parameter_names[i]];
-								}
+						handler: function() {
+							for (var i = 0; i < parameter_names.length; i++) {
+								delete bigStore.baseParams[parameter_names[i]];
 							}
-							bigStore.load({params: {start:0, limit: 4} });
+							Ext.getCmp('server-name').setValue('');
+							delete bigStore.baseParams['server'];
+							bigStore.load({params: {start: 0, limit: 4} });
 						}
-					}, '-', '->', '-', '<label for="ipaddr">Search: </label>',
-					new Ext.form.TwinTriggerField({
-						id: 'ipaddr',
-						name: 'ipaddr',
+					}, '-', '->', '-', '<label for="server-name">Search: </label>',
+					new Ext.form.TriggerField({
+						id: 'server-name',
+						name: 'server-name',
 						emptyText: 'Filter by server name',
-						trigger1Class: 'x-form-search-trigger',
-						trigger2Class: 'x-form-clear-trigger',
-						onTrigger1Click: function(){
-							Ext.getCmp('showall').disable();
+						triggerClass: 'x-form-search-trigger',
+						onTriggerClick: function(){
 							bigStore.baseParams['server'] = this.getValue();
 							bigStore.load({params: {start:0, limit: 4} });
 						},
-						onTrigger2Click: function(){
-							this.setValue('');
-							Ext.getCmp('showall').enable();
-							Ext.getCmp('showall').focus();
-							delete bigStore.baseParams['server'];
-							bigStore.load({params: {start:0, limit: 4} });
-						}
 					}),
 				],
 			},
