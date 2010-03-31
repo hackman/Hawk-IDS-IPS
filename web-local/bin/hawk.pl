@@ -14,6 +14,7 @@ use warnings;
 use DBI; 
 use JSON::XS;
 use CGI qw/:standard/;
+use POSIX qw(strftime);
 
 my $dbname = "hawk";
 my $dbuser = "hawk";
@@ -40,6 +41,18 @@ my $charts_24h_query = "
 	GROUP BY hourly
 ";
 
+my $brutes_24h = $conn->prepare('
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service
+	FROM broots
+	WHERE date > now() - interval \'24 hours\';
+');
+
+my $failed_24h = $conn->prepare('
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service, "user"
+	FROM failed_log
+	WHERE date > now() - interval \'24 hours\';
+');
+
 my $brutes_count = $conn->prepare('
 	SELECT COUNT(id), service
 	FROM broots
@@ -53,6 +66,12 @@ my $brutes_summary_query = "
 	WHERE date > now() - interval '%s'
 	GROUP BY ip;
 ";
+
+my $select_blocked = $conn->prepare('
+	SELECT TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'), TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'), ip, reason
+	FROM blacklist
+	WHERE ip=?
+');
 
 if (defined(param('id'))) {
 	print "Content-type: text/plain\r\n\r\n";
@@ -89,16 +108,73 @@ if (defined(param('id'))) {
 	} elsif ($id == 3) {
 		if (defined(param('type'))) {
 			my $type = param('type');
+			my $hour = strftime('%H', localtime(time));
+			my $new;
 			my $charts_24h = $conn->prepare(sprintf($charts_24h_query, $type));
 			$charts_24h->execute() or web_error("Unable to get chart info from database: $DBI::errstr");
-			my $count = 0;
+			#my $count = 0;
 			my @charts = ();
+			my %interval;
 			while (my @data = $charts_24h->fetchrow_array) {
-				$charts[$count] = [@data];
+				$interval{$data[1]} = $data[0];
+				#$charts[$count] = [@data];
+				#$count++;
+			}
+			my $hour = strftime('%H', localtime(time));
+			my $new;
+			for (my $i=0; $i<24; $i++) {
+				$new=($hour-$i)%24;
+				if ($new < 10) {
+					$new = "0$new:00";
+				} else {
+					$new = "$new:00";
+				}
+				if ($interval{$new}) {
+					push(@charts, [$interval{$new}, $new]);
+				} else {
+					push(@charts, [0, $new]);
+				}
+			}
+			
+			#foreach my $k (sort (keys(%interval))) {			
+			#foreach my $k(keys %interval) {
+			#	push(@charts, [$interval{$k}, $k]);
+			#}
+			my $json = JSON::XS->new->ascii->pretty->allow_nonref;
+			print $json->encode(\@charts);
+		}
+	} elsif ($id == 4) {
+		$brutes_24h->execute() or web_error("Unable to get brutes 24h from database: $DBI::errstr");
+		my $count = 0;
+		my @brutes = ();
+		while (my @data = $brutes_24h->fetchrow_array) {
+			$brutes[$count] = [@data];
+			$count++;
+		}
+		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
+		print $json->encode(\@brutes);
+	} elsif ($id == 5) {
+		$failed_24h->execute() or web_error("Unable to get failed 24h from database: $DBI::errstr");
+		my $count = 0;
+		my @failed = ();
+		while (my @data = $failed_24h->fetchrow_array) {
+			$failed[$count] = [@data];
+			$count++;
+		}
+		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
+		print $json->encode(\@failed);
+	} elsif ($id == 6) {
+		if (defined(param('ip'))) {
+			my $ip = param('ip');
+			$select_blocked->execute($ip) or web_error("Unable to get IP address from database: $DBI::errstr");
+			my $count = 0;
+			my @result = ();
+			while (my @data = $select_blocked->fetchrow_array) {
+				$result[$count] = [@data];
 				$count++;
 			}
 			my $json = JSON::XS->new->ascii->pretty->allow_nonref;
-			print $json->encode(\@charts);
+			print $json->encode(\@result);
 		}
 	}
 } else {
