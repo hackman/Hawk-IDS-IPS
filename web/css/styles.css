@@ -4,7 +4,7 @@ body {
 }
 
 #header {
-	height: 70px;
+	height: 100px;
 	width: 100%;
 	top: 0px;
 	border-bottom: 1px solid black;
@@ -17,7 +17,7 @@ body {
 	bottom: 0px;
 	border-top: 1px solid black;
 	background: #BDD7F2;
-	height: 50px;
+	height: 40px;
 }
 
 #main {

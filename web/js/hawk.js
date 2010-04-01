@@ -1,10 +1,10 @@
 var config = {
 	min_brutes: 0,
-	max_brutes: 2000000000,
+	max_brutes: 1000,
 	min_failed: 0,
-	max_failed: 2000000000,
+	max_failed: 10000,
 	min_blocked: 0,
-	max_blocked: 2000000000,
+	max_blocked: 1000,
 	chartLineSize: 1,
 	chartDotSize: 5,
 }
@@ -57,7 +57,7 @@ Ext.onReady(function () {
 	var charts = new Array();
 
 	bigStore = new Ext.data.JsonStore({
-		url: '../cgi-bin/master.pl',
+		url: 'master.pl',
 		baseParams: {
 			txt: 1,
 		//	debug: 1,
@@ -82,7 +82,7 @@ Ext.onReady(function () {
 				for (i=0; i < bigStore.getCount(); i++) {
 					stores[i].loadData(bigStore.getAt(i).data.chartData);
 					charts[i].setTitle('<a href="http://' + bigStore.getAt(i).data.serverName +
-						'/~sentry/cgi-bin/hawk-web.pl">' + bigStore.getAt(i).data.serverName + '</a>');
+						'/~sentry/web-local/hawk.html">' + bigStore.getAt(i).data.serverName + '</a>');
 				}
 				hideCharts(bigStore.getCount());
 			}
@@ -102,7 +102,12 @@ Ext.onReady(function () {
 	function showCharts(count) {
 		for (var i = charts.length; i < count; i++) {
 			stores.push(new Ext.data.JsonStore({
-				fields: ['hour', 'brutes', 'failed', 'blocked'],
+				fields: [
+					{name: 'hour', mapping: 'hour', type: 'int'},
+					{name: 'brutes', mapping: 'brutes', type: 'int'},
+					{name: 'failed', mapping: 'failed', type: 'int'},
+					{name: 'blocked', mapping: 'blocked', type: 'int'},
+				]
 			}));
 
 			charts.push( new Ext.Panel({
@@ -169,7 +174,7 @@ Ext.onReady(function () {
 		monitorValid: true,
 		items: [
 			new Ext.form.NumberField({
-				width: 40,
+				width: 45,
 				id: 'min_brutes_i',
 				labelStyle: 'width:150px',
 				fieldLabel: 'Min bruteforce attempts',
@@ -178,7 +183,7 @@ Ext.onReady(function () {
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
-				width: 40,
+				width: 45,
 				id: 'max_brutes_i',
 				labelStyle: 'width:150px',
 				fieldLabel: 'Max bruteforce attempts',
@@ -187,7 +192,7 @@ Ext.onReady(function () {
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
-				width: 40,
+				width: 45,
 				id:'min_failed_i',
 				labelStyle: 'width:150px',
 				fieldLabel:'Min failed attempts',
@@ -196,7 +201,7 @@ Ext.onReady(function () {
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
-				width: 40,
+				width: 45,
 				id:'max_failed_i',
 				labelStyle: 'width:150px',
 				fieldLabel:'Max failed attempts',
@@ -205,7 +210,7 @@ Ext.onReady(function () {
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
-				width: 40,
+				width: 45,
 				id:'min_blocked_i',
 				labelStyle: 'width:150px',
 				fieldLabel:'Min blocked IP addresses',
@@ -214,7 +219,7 @@ Ext.onReady(function () {
 				vtype:'minMaxNumber',
 			}),
 			new Ext.form.NumberField({
-				width: 40,
+				width: 45,
 				id:'max_blocked_i',
 				labelStyle: 'width:150px',
 				fieldLabel:'Max blocked IP addresses',
