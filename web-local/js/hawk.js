@@ -95,6 +95,26 @@ function Show_Failed() {
 }
 
 function ShowResults(ipaddr) {
+	var Validate_RegExp = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
+	if (!ipaddr) {
+		Ext.MessageBox.show({
+			title: 'Error',
+			msg: 'There is no IP address entered!',
+			buttons: Ext.MessageBox.OK,
+			icon: 'ext-mb-error'
+		});
+		return;
+	}
+	if (ipaddr.match(Validate_RegExp) == null) {
+		Ext.MessageBox.show({
+			title: 'Error',
+			msg: 'Icorrect IP address!',
+			buttons: Ext.MessageBox.OK,
+			icon: 'ext-mb-error'
+		});
+		return;
+	}
+	
 	var charts_store = new Ext.data.JsonStore({
 		fields:['hour', 'brutes', 'failed', 'blocked'],
 		data: [
@@ -139,6 +159,16 @@ function ShowResults(ipaddr) {
 			{name: 'reason', mapping: 3},
 		]
 	});
+	
+	if (search_store.getCount() == 0) {
+		Ext.MessageBox.show({
+			title: 'Info',
+			msg: 'IP address not found!',
+			buttons: Ext.MessageBox.OK,
+			icon: 'ext-mb-info'
+		});
+		return;
+	}
 
 	var search_grid = new Ext.grid.GridPanel({
 		store: search_store,
@@ -172,6 +202,11 @@ function ShowResults(ipaddr) {
 			xField: 'hour',
 			//height: '220px',
 			//width: '438px',
+			extraStyle: {
+				legend: {
+					display: 'bottom'
+				},
+			},
 			series: [{
 				type: 'column',
 				displayName: 'bruteforce attempts',
@@ -242,6 +277,11 @@ Ext.onReady(function(){
 					store: charts_store,
 					xField: 'hour',
 					yField: 'count',
+					extraStyle: {
+						legend: {
+							display: 'bottom'
+						},
+					},
 					series: [{
 						type: 'line',
 						displayName: chartsObj.options[j].name,
@@ -249,8 +289,8 @@ Ext.onReady(function(){
 							color: chartsObj.options[j].color,
 							size: config.chartDotSize,
 							lineSize: config.chartLineSize,
-						}
-					}]
+						},
+					}]	
 				}
 			})
 		);
@@ -294,7 +334,7 @@ Ext.onReady(function(){
 			name: 'ipaddr',
 			fieldLabel: 'IP address',
 			labelStyle: 'font-case:lower;',
-			allowBlank:false,
+			//allowBlank:false,
 			triggerClass: 'x-form-search-trigger',
 			onTriggerClick: function(){
 				var ipaddr = SearchIP.getForm().findField("ipaddr").getValue();
