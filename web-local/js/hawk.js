@@ -3,10 +3,25 @@ var base_url = '/~sentry/cgi-bin/jivko/';
 
 config = {
 	chartLineSize: 1,
-	chartDotSize: 5,
+	chartDotSize: 5
 }
 
+var CommonWin = new Ext.Window({
+	width:800,
+	height:400,
+	shadow: true,
+	resizable: false,
+	closeAction: 'hide'
+});
+
 function Show_Brutes() {
+	Ext.MessageBox.show({
+		msg: 'Loading, please wait...',
+		progressText: 'Loading...',
+		width:300,
+		wait:true,
+		waitConfig: {interval:200},
+	});
 	var brutes_store = new Ext.data.JsonStore({
 		autoLoad: true,
 		url: '../cgi-bin/jivko/hawk.pl',
@@ -17,39 +32,54 @@ function Show_Brutes() {
 			{name: 'date', mapping: 0},
 			{name: 'ip', mapping: 1},
 			{name: 'service', mapping: 2}
-		]
-	});
-
-	var brutes_grid = new Ext.grid.GridPanel({
-		store: brutes_store,
-		columns: [
-			{header: 'Date', width: 250},
-			{header: 'IP address', width: 250},
-			{header: 'Service', width: 250}
 		],
-		width: 750,
-		height: 400,
-		layout: 'fit',
-		style: {
-			'margin-top': '10px',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
+		listeners: {
+			load: function() {
+				Ext.MessageBox.hide();
+				if (brutes_store.getCount() == 0) {
+					Ext.MessageBox.show({
+						title: 'Info',
+						msg: 'Entry not found!',
+						buttons: Ext.MessageBox.OK,
+						icon: 'ext-mb-info'
+					});
+					return;
+				} else {
+					var brutes_grid = new Ext.grid.GridPanel({
+						store: brutes_store,
+						columns: [
+							{header: 'Date', width: 250},
+							{header: 'IP address', width: 250},
+							{header: 'Service', width: 250}
+						],
+						width: 750,
+						height: 400,
+						layout: 'fit',
+						style: {
+							'margin-top': '10px',
+							'margin-left': 'auto',
+							'margin-right': 'auto',
+						}
+					});
+					CommonWin.removeAll();
+					CommonWin.title = 'Bruteforce attempts (24 hrs only)';
+					CommonWin.add(brutes_grid);
+					CommonWin.doLayout();
+					CommonWin.show();
+				}
+			}
 		}
 	});
-	
-		var BrutesWin = new Ext.Window({
-			width:800,
-			height:400,
-			shadow: true,
-			id: 'results',
-			title: 'Bruteforce attempts (24 hrs only)',
-			resizable: false,
-			items: brutes_grid
-		});
-	BrutesWin.show();
 }
 
 function Show_Failed() {
+	Ext.MessageBox.show({
+		msg: 'Loading, please wait...',
+		progressText: 'Loading...',
+		width:300,
+		wait:true,
+		waitConfig: {interval:200},
+	});
 	var failed_store = new Ext.data.JsonStore({
 		autoLoad: true,
 		url: '../cgi-bin/jivko/hawk.pl',
@@ -61,37 +91,46 @@ function Show_Failed() {
 			{name: 'ip', mapping: 1},
 			{name: 'service', mapping: 2},
 			{name: 'username', mapping: 3}
-		]
-	});
-
-	var failed_grid = new Ext.grid.GridPanel({
-		store: failed_store,
-		columns: [
-			{header: 'Date', width: 195},
-			{header: 'IP address', width: 195},
-			{header: 'Service', width: 195},
-			{header: 'Username', width: 195}
 		],
-		width: 750,
-		height: 400,
-		layout: 'fit',
-		style: {
-			'margin-top': '10px',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
+		listeners: {
+			load: function() {
+				Ext.MessageBox.hide();
+				if (failed_store.getCount() == 0) {
+					Ext.MessageBox.show({
+						title: 'Info',
+						msg: 'Entry not found!',
+						buttons: Ext.MessageBox.OK,
+						icon: 'ext-mb-info'
+					});
+					return;
+				} else {
+					var failed_grid = new Ext.grid.GridPanel({
+						store: failed_store,
+						columns: [
+							{header: 'Date', width: 195},
+							{header: 'IP address', width: 195},
+							{header: 'Service', width: 195},
+							{header: 'Username', width: 195}
+						],
+						width: 750,
+						height: 400,
+						layout: 'fit',
+						style: {
+							'margin-top': '10px',
+							'margin-left': 'auto',
+							'margin-right': 'auto',
+						}
+					});
+
+					CommonWin.removeAll();
+					CommonWin.title = 'Failed attempts (24 hrs only)';
+					CommonWin.add(failed_grid);
+					CommonWin.doLayout();
+					CommonWin.show();
+				}
+			}
 		}
 	});
-	
-	var FailedWin = new Ext.Window({
-		width:800,
-		height:400,
-		shadow: true,
-		id: 'results',
-		title: 'Failed attempts (24 hrs only)',
-		resizable: false,
-		items: failed_grid
-	});
-	FailedWin.show();
 }
 
 function ShowResults(ipaddr) {
@@ -115,34 +154,13 @@ function ShowResults(ipaddr) {
 		return;
 	}
 	
-	var charts_store = new Ext.data.JsonStore({
-		fields:['hour', 'brutes', 'failed', 'blocked'],
-		data: [
-			{hour:'08:00', brutes:298, failed:2252, blocked:1050},
-			{hour:'09:00', brutes:213, failed:2194, blocked:1061},
-			{hour:'10:00', brutes:3496, failed:2361, blocked:1134},
-			{hour:'11:00', brutes:3460, failed:2640, blocked:1267},
-			{hour:'12:00', brutes:2946, failed:2289, blocked:1140},
-			{hour:'13:00', brutes:3650, failed:2751, blocked:1324},
-			{hour:'14:00', brutes:3239, failed:2394, blocked:1253},
-			{hour:'15:00', brutes:3200, failed:2360, blocked:1155},
-			{hour:'16:00', brutes:3636, failed:2755, blocked:1324},
-			{hour:'17:00', brutes:4012, failed:352, blocked:1729},
-			{hour:'18:00', brutes:3505, failed:243, blocked:1391},
-			{hour:'19:00', brutes:3301, failed:2567, blocked:1354},
-			{hour:'20:00', brutes:3277, failed:2385, blocked:11252},
-			{hour:'21:00', brutes:3860, failed:3027, blocked:1565},
-			{hour:'22:00', brutes:2945, failed:2554, blocked:1268},
-			{hour:'23:00', brutes:3369, failed:2798, blocked:1320},
-			{hour:'00:00', brutes:3404, failed:2340, blocked:1161},
-			{hour:'01:00', brutes:3312, failed:2533, blocked:1306},
-			{hour:'02:00', brutes:3084, failed:2409, blocked:1221},
-			{hour:'03:00', brutes:3069, failed:2447, blocked:1255},
-			{hour:'04:00', brutes:3629, failed:2719, blocked:1330},
-			{hour:'05:00', brutes:3113, failed:2535, blocked:1293},
-			{hour:'06:00', brutes:3658, failed:2743, blocked:1522},
-			{hour:'07:00', brutes:3133, failed:2309, blocked:1353}
-		]
+	Ext.MessageBox.show({
+		msg: 'Searching, please wait...',
+		progressText: 'Searching...',
+		width:300,
+		wait:true,
+		waitConfig: {interval:200},
+		//icon:'ext-mb-info'
 	});
 	
 	var search_store = new Ext.data.JsonStore({
@@ -157,88 +175,151 @@ function ShowResults(ipaddr) {
 			{name: 'date_removed', mapping: 1},
 			{name: 'ip', mapping: 2},
 			{name: 'reason', mapping: 3},
-		]
-	});
-	
-	if (search_store.getCount() == 0) {
-		Ext.MessageBox.show({
-			title: 'Info',
-			msg: 'IP address not found!',
-			buttons: Ext.MessageBox.OK,
-			icon: 'ext-mb-info'
-		});
-		return;
-	}
-
-	var search_grid = new Ext.grid.GridPanel({
-		store: search_store,
-		columns: [
-			{header: 'Date added', width: 125},
-			{header: 'Date removed', width: 125},
-			{header: 'IP address', width: 100},
-			{header: 'Reason', width: 400},
-			//{header: 'Action', width: 205, renderer: function(value, metaData, record, rowIndex, colIndex, store){ return '<a href="#" onclick="alert(record)">Unblock</a>';}}
 		],
-		width: 800,
-		height: 50,
-		layout: 'fit',
-		style: {
-			'margin-top': '10px',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
-		},
-	});
-	
-	var chart = new Ext.Panel({
-		title: 'Brute/Failed attempts statistics',
-		width:440,
-		height:220,
-		style: {
-			float: 'left',
-			'margin': 5,
-		},
-		items:  new Ext.chart.LineChart({
-			store: charts_store,
-			xField: 'hour',
-			//height: '220px',
-			//width: '438px',
-			extraStyle: {
-				legend: {
-					display: 'bottom'
-				},
-			},
-			series: [{
-				type: 'column',
-				displayName: 'bruteforce attempts',
-				yField: 'brutes',
-				style: {
-					color:0xff0000,
-					size: config.chartDotSize,
-					lineSize: config.chartLineSize,
+		listeners: {
+			load: function() {
+				Ext.MessageBox.hide();
+				if (search_store.getCount() == 0) {
+					Ext.MessageBox.show({
+						title: 'Info',
+						msg: 'IP address not found!',
+						buttons: Ext.MessageBox.OK,
+						icon: 'ext-mb-info'
+					});
+					return;
 				}
-			},{
-				type:'column',
-				displayName: 'failed attempts',
-				yField: 'failed',
-				style: {
-					color: 0x00ff00,
-					size: config.chartDotSize,
-					lineSize: config.chartLineSize,
+				var search_grid = new Ext.grid.GridPanel({
+					store: search_store,
+					columns: [
+						{header: 'Date added', width: 125},
+						{header: 'Date removed', width: 125, renderer: function(value) {
+								if (!value) {
+									return "still active";
+								} else {
+									return value;
+								}
+							}
+						},
+						{header: 'IP address', width: 100},
+						{header: 'Reason', width: 400},
+					],
+					width: 800,
+					height: 50,
+					layout: 'fit',
+					style: {
+						'margin-top': '10px',
+						'margin-left': 'auto',
+						'margin-right': 'auto',
+					},
+				});
+
+				var charts_store = new Ext.data.JsonStore({
+					autoLoad: true,
+					url: '../cgi-bin/jivko/hawk.pl',
+					baseParams: {
+						id: '7'
+					},
+					fields: [
+						{name: 'hour', mapping: 0},
+						{name: 'brutes', mapping: 1, type: 'int'},
+						{name: 'failed', mapping: 2, type: 'int'}
+					]
+				});
+
+				var chart = new Ext.Panel({
+					title: 'Brute/Failed attempts statistics',
+					width:440,
+					height:220,
+					style: {
+						float: 'left',
+						'margin': 5,
+					},
+					items:  new Ext.chart.LineChart({
+						store: charts_store,
+						xField: 'hour',
+						//height: '220px',
+						//width: '438px',
+						extraStyle: {
+							legend: {
+								display: 'bottom'
+							},
+						},
+						series: [{
+							type: 'column',
+							displayName: 'bruteforce attempts',
+							yField: 'brutes',
+							style: {
+								color:0xff0000,
+							}
+						},{
+							type:'column',
+							displayName: 'failed attempts',
+							yField: 'failed',
+							style: {
+								color: 0x0000ff,
+							}
+						}],
+			        })
+				});
+				CommonWin.removeAll();
+				CommonWin.title = 'Results';
+				CommonWin.add([ search_grid, chart ]);
+				CommonWin.doLayout();
+				CommonWin.show();
+			}
+		}
+	});
+}
+
+function Show_Services(type) {
+	var services_store = new Ext.data.JsonStore({
+		autoLoad: true,
+		url: '../cgi-bin/jivko/hawk.pl',
+		baseParams: {
+			id: '1',
+			service: type
+		},
+		fields: [
+			{name: 'date', mapping: 0},
+			{name: 'ip', mapping: 1}
+		],
+		listeners: {
+			load: function() {
+				Ext.MessageBox.hide();
+				if (services_store.getCount() == 0) {
+					Ext.MessageBox.show({
+						title: 'Info',
+						msg: 'Entry not found!',
+						buttons: Ext.MessageBox.OK,
+						icon: 'ext-mb-info'
+					});
+					return;
+				} else {
+					var services_grid = new Ext.grid.GridPanel({
+						store: services_store,
+						columns: [
+							{header: 'Date', width: 195},
+							{header: 'IP address', width: 195}
+						],
+						width: 750,
+						height: 400,
+						layout: 'fit',
+						style: {
+							'margin-top': '10px',
+							'margin-left': 'auto',
+							'margin-right': 'auto',
+						}
+					});
+
+					CommonWin.removeAll();
+					CommonWin.title = 'Bruteforce attempts (24 hrs only)';
+					CommonWin.add(services_grid);
+					CommonWin.doLayout();
+					CommonWin.show();
 				}
-			}],
-        })
+			}
+		}
 	});
-	
-	var ResultsWin = new Ext.Window({
-		width:800,
-		height:400,
-		shadow: true,
-		id: 'results',
-		title:"Results",
-		resizable: false,
-		items: [ search_grid, chart ]
-	});
-	ResultsWin.show();	
 }
 
 Ext.onReady(function(){
@@ -363,12 +444,30 @@ Ext.onReady(function(){
 	var brute_grid = new Ext.grid.GridPanel({
 		store: brute_store,
 		columns: [
-			{header: 'FTP', width: 150},
-			{header: 'SSH', width: 150},
-			{header: 'POP3', width: 150},
-			{header: 'IMAP', width: 150},
-			{header: 'WebMail', width: 150},
-			{header: 'cPanel', width: 150}
+			{header: 'FTP', width: 150, renderer: function(value, metaData, record, rowIndex, colIndex, store) {
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+				}
+			},
+			{header: 'SSH', width: 150, renderer: function(value) {
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+				}
+			},
+			{header: 'POP3', width: 150, renderer: function(value) {
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+				}
+			},
+			{header: 'IMAP', width: 150, renderer: function(value) {
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+				}
+			},
+			{header: 'WebMail', width: 150, renderer: function(value) {
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+				}
+			},
+			{header: 'cPanel', width: 150, renderer: function(value) {
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+				}
+			}
 		],
 		enableHdMenu: false,
 		width: 905,
