@@ -5,13 +5,22 @@ use CGI qw(param);
 use CGI::Carp qw(fatalsToBrowser);
 use JSON::XS;
 
-use lib '/home/dvd/projects/local-api/lib/';
+if (-e '/home/dvd/projects/local-api/lib/') {
+	use lib '/home/dvd/projects/local-api/lib/';
+} else {
+	use lib '/home/sgapi/lib/';
+}
 use parse_config;
 use db_utils;
 use web_error;
 
-my $VERSION = '0.1.3';
-my $conf_file = '/home/dvd/projects/hawk-commercial/web/web.conf';
+my $VERSION = '0.1.4';
+my $conf_file;
+if (-e '/home/dvd/projects/hawk-commercial/web/web.conf') {
+	$conf_file = '/home/dvd/projects/hawk-commercial/web/web.conf';
+} else {
+	$conf_file = '/home/dvd/etc/web.conf';
+}
 my %config = parse_config($conf_file);
 
 my $get_server_names = '
