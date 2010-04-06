@@ -1,5 +1,5 @@
 Ext.chart.Chart.CHART_URL = 'ext-3.1.1/resources/charts.swf';
-var base_url = '/~sentry/cgi-bin/jivko/';
+var base_url = '/~sentry/cgi-bin/web-local/hawk.pl';
 
 config = {
 	chartLineSize: 1,
@@ -14,6 +14,10 @@ var CommonWin = new Ext.Window({
 	closeAction: 'hide'
 });
 
+function CreateLink(value, action) {
+	return value + " " + action;
+}
+
 function Show_Brutes() {
 	Ext.MessageBox.show({
 		msg: 'Loading, please wait...',
@@ -24,7 +28,7 @@ function Show_Brutes() {
 	});
 	var brutes_store = new Ext.data.JsonStore({
 		autoLoad: true,
-		url: '../cgi-bin/jivko/hawk.pl',
+		url: base_url,
 		baseParams: {
 			id: '4'
 		},
@@ -82,7 +86,7 @@ function Show_Failed() {
 	});
 	var failed_store = new Ext.data.JsonStore({
 		autoLoad: true,
-		url: '../cgi-bin/jivko/hawk.pl',
+		url: base_url,
 		baseParams: {
 			id: '5'
 		},
@@ -147,7 +151,7 @@ function ShowResults(ipaddr) {
 	if (ipaddr.match(Validate_RegExp) == null) {
 		Ext.MessageBox.show({
 			title: 'Error',
-			msg: 'Icorrect IP address!',
+			msg: 'Incorrect IP address!',
 			buttons: Ext.MessageBox.OK,
 			icon: 'ext-mb-error'
 		});
@@ -165,7 +169,7 @@ function ShowResults(ipaddr) {
 	
 	var search_store = new Ext.data.JsonStore({
 		autoLoad: true,
-		url: '../cgi-bin/jivko/hawk.pl',
+		url: base_url,
 		baseParams: {
 			id: '6',
 			ip: ipaddr
@@ -215,7 +219,7 @@ function ShowResults(ipaddr) {
 
 				var charts_store = new Ext.data.JsonStore({
 					autoLoad: true,
-					url: '../cgi-bin/jivko/hawk.pl',
+					url: base_url,
 					baseParams: {
 						id: '7'
 					},
@@ -272,9 +276,16 @@ function ShowResults(ipaddr) {
 }
 
 function Show_Services(type) {
+	Ext.MessageBox.show({
+		msg: 'Loading, please wait...',
+		progressText: 'Loading...',
+		width:300,
+		wait:true,
+		waitConfig: {interval:200},
+	});
 	var services_store = new Ext.data.JsonStore({
 		autoLoad: true,
-		url: '../cgi-bin/jivko/hawk.pl',
+		url: base_url,
 		baseParams: {
 			id: '1',
 			service: type
@@ -322,6 +333,70 @@ function Show_Services(type) {
 	});
 }
 
+function Show_IP_Details(ipaddr, interval) {
+	//alert(ipaddr + " " + interval);
+	Ext.MessageBox.show({
+		msg: 'Loading, please wait...',
+		progressText: 'Loading...',
+		width:300,
+		wait:true,
+		waitConfig: {interval:200},
+	});
+	var details_store = new Ext.data.JsonStore({
+		autoLoad: true,
+		url: base_url,
+		baseParams: {
+			id: '8',
+			interval: interval,
+			ip: ipaddr
+		},
+		fields: [
+			{name: 'date', mapping: 0},
+			{name: 'ip', mapping: 1},
+			{name: 'username', mapping: 2},
+			{name: 'service', mapping: 3}
+		],
+		listeners: {
+			load: function() {
+				Ext.MessageBox.hide();
+				if (details_store.getCount() == 0) {
+					Ext.MessageBox.show({
+						title: 'Info',
+						msg: 'Entry not found!',
+						buttons: Ext.MessageBox.OK,
+						icon: 'ext-mb-info'
+					});
+					return;
+				} else {
+					var details_grid = new Ext.grid.GridPanel({
+						store: details_store,
+						columns: [
+							{header: 'Date', width: 195},
+							{header: 'IP address', width: 195},
+							{header: 'Username', width: 195},
+							{header: 'Service', width: 195}
+						],
+						width: 750,
+						height: 400,
+						layout: 'fit',
+						style: {
+							'margin-top': '10px',
+							'margin-left': 'auto',
+							'margin-right': 'auto',
+						}
+					});
+
+					CommonWin.removeAll();
+					CommonWin.title = 'IP address details';
+					CommonWin.add(details_grid);
+					CommonWin.doLayout();
+					CommonWin.show();
+				}
+			}
+		}
+	});
+}
+
 Ext.onReady(function(){
 	var charts = new Array();
 	var charts_store;
@@ -335,7 +410,7 @@ Ext.onReady(function(){
 	for (var j=0; j<chartsObj.options.length; j++) {
 		charts_store = new Ext.data.JsonStore({
 			autoLoad: true,
-			url: '../cgi-bin/jivko/hawk.pl',
+			url: base_url,
 			baseParams: {
 				id: '3',
 				type: chartsObj.options[j].type
@@ -389,7 +464,7 @@ Ext.onReady(function(){
 			'margin-right': 'auto',
 		},
 		items: [{
-				title: 'Charts',
+				title: '<a href="http://api.sgvps.net/web/hawk.html">Back to master interface</a>',
 				items: charts,
 		}]
 	});
@@ -417,16 +492,22 @@ Ext.onReady(function(){
 			labelStyle: 'font-case:lower;',
 			//allowBlank:false,
 			triggerClass: 'x-form-search-trigger',
-			onTriggerClick: function(){
-				var ipaddr = SearchIP.getForm().findField("ipaddr").getValue();
-				ShowResults(ipaddr);
+			listeners : {
+				specialkey : function(field, event) {
+					if (Ext.EventObject.getKey(event) == event.ENTER) {
+						ShowResults(field.getValue());
+					};
+				},
+			},
+			onTriggerClick: function(field) {
+				ShowResults(this.getValue());
 			}
 		})
 	});
 	
 	var brute_store = new Ext.data.JsonStore({
 		autoLoad: true,
-		url: '../cgi-bin/jivko/hawk.pl',
+		url: base_url,
 		baseParams: {
 			id: 1
 		},
@@ -449,23 +530,23 @@ Ext.onReady(function(){
 				}
 			},
 			{header: 'SSH', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(1)">' + value + '</a>';
 				}
 			},
 			{header: 'POP3', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(2)">' + value + '</a>';
 				}
 			},
 			{header: 'IMAP', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(3)">' + value + '</a>';
 				}
 			},
 			{header: 'WebMail', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(4)">' + value + '</a>';
 				}
 			},
 			{header: 'cPanel', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(5)">' + value + '</a>';
 				}
 			}
 		],
@@ -484,17 +565,17 @@ Ext.onReady(function(){
 	
 	var summary_store;
 	var summary_grid = new Array();
-	summaryObj = new Object({
-		options: [
+	var summaryObj = new Object({
+ 		options: [
 			{interval: '1 hours', title: '1 hour summary'},
 			{interval: '24 hours', title: 'Daily summary'},
 			{interval: '1 weeks', title: 'Weekly summary'},
-		]
+		],
 	});
 	for (var i=0; i<summaryObj.options.length; i++) {
 		summary_store = new Ext.data.JsonStore({
 			autoLoad: true,
-			url: '../cgi-bin/jivko/hawk.pl',
+			url: base_url,
 			baseParams: {
 				id: '2',
 				interval: summaryObj.options[i].interval
@@ -521,6 +602,19 @@ Ext.onReady(function(){
 			})
 		);
 	}
+
+	summary_grid[0].on('rowclick', function(grid, rowIndex, e) {
+		record = grid.getStore().getAt(rowIndex).json;
+		Show_IP_Details(record[1], summaryObj.options[0].interval);
+	});
+	summary_grid[1].on('rowclick', function(grid, rowIndex, e) {
+		record = grid.getStore().getAt(rowIndex).json;
+		Show_IP_Details(record[1], summaryObj.options[1].interval);
+	});
+	summary_grid[2].on('rowclick', function(grid, rowIndex, e) {
+		record = grid.getStore().getAt(rowIndex).json;
+		Show_IP_Details(record[1], summaryObj.options[2].interval);
+	});
 
 	var summaryPanel = new Ext.Panel({
 		id:'summary-panel',

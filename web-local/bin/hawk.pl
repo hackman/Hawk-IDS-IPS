@@ -16,14 +16,12 @@ use JSON::XS;
 use CGI qw/:standard/;
 use POSIX qw(strftime);
 
-my $dbname = "hawk";
-my $dbuser = "hawk";
-my $dbpass = 'b41f12bf5c9add618ce7d7032fd2f630';
-my %db_config = (
-	"db" => $dbname,
-	"dbuser" => $dbuser,
-	"dbpass" => $dbpass
-);
+require "/home/sentry/hackman/cpustats/modules/parse_config.pm";
+
+import parse_config;
+
+my $conf = '/home/sentry/hackman/hawk-web.conf';
+my %config = parse_config($conf);
 my $version = 0.1;
 my %srvhash = (
 	"0" => "ftp",
@@ -40,7 +38,7 @@ sub web_error {
 	exit 1;
 }
 
-my $conn   = DBI->connect("dbi:Pg:dbname=$db_config{'db'}", $db_config{'dbuser'}, $db_config{'dbpass'}, { PrintError => 1, AutoCommit => 1 } ) or web_error("Unable to connect to pgsql: $DBI::errstr");
+my $conn   = DBI->connect("$config{'db'}", $config{'dbuser'}, $config{'dbpass'}, { PrintError => 1, AutoCommit => 1 } ) or web_error("Unable to connect to pgsql: $DBI::errstr");
 
 my $charts_24h_query = "
 	SELECT COUNT(id), TO_CHAR(date_trunc(\'hour\', date), \'HH:MI\') AS hourly
@@ -87,6 +85,13 @@ my $select_blocked = $conn->prepare('
 	FROM blacklist
 	WHERE ip=?
 ');
+
+my $failed_ip_query = "
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, \"user\", service
+	FROM failed_log
+	WHERE date > now() - interval '%s'
+	AND ip=?;
+";
 
 if (defined(param('id'))) {
 	print "Content-type: text/plain\r\n\r\n";
@@ -145,8 +150,6 @@ if (defined(param('id'))) {
 			while (my @data = $charts_24h->fetchrow_array) {
 				$interval{$data[1]} = $data[0];
 			}
-			my $hour = strftime('%H', localtime(time));
-			my $new;
 			for (my $i=0; $i<24; $i++) {
 				$new=($hour-$i)%24;
 				if ($new < 10) {
@@ -178,6 +181,7 @@ if (defined(param('id'))) {
 		my $count = 0;
 		my @failed = ();
 		while (my @data = $failed_24h->fetchrow_array) {
+			$data[2] = $srvhash{$data[2]};
 			$failed[$count] = [@data];
 			$count++;
 		}
@@ -223,6 +227,22 @@ if (defined(param('id'))) {
 		}
 		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
 		print $json->encode(\@charts);
+	} elsif ($id == 8) {
+		if (defined(param('interval')) && defined(param('ip'))) {
+			my $interval = param('interval');
+			my $ip = param('ip');
+			my $failed_ip = $conn->prepare(sprintf($failed_ip_query, $interval));
+			$failed_ip->execute($ip) or web_error("Unable to get failed ip from database: $DBI::errstr");
+			my $count = 0;
+			my @failed = ();
+			while (my @data = $failed_ip->fetchrow_array) {
+				$data[3] = $srvhash{$data[3]};
+				$failed[$count] = [@data];
+				$count++;
+			}
+			my $json = JSON::XS->new->ascii->pretty->allow_nonref;
+			print $json->encode(\@failed);
+		}
 	}
 } else {
 	print "Content-type: text/plain\r\n\r\n";

@@ -314,7 +314,7 @@ Ext.onReady(function () {
 							},
 						},
 						onTriggerClick: function(){
-							this.search(field.getValue());
+							this.search(this.getValue());
 						},
 						search: function(serverName) {
 							bigStore.baseParams['server'] = this.getValue();
