@@ -103,7 +103,7 @@ Ext.onReady(function () {
 		for (var i = charts.length; i < count; i++) {
 			stores.push(new Ext.data.JsonStore({
 				fields: [
-					{name: 'hour', mapping: 'hour', type: 'int'},
+					{name: 'hour', mapping: 'hour', type: 'string'},
 					{name: 'brutes', mapping: 'brutes', type: 'int'},
 					{name: 'failed', mapping: 'failed', type: 'int'},
 					{name: 'blocked', mapping: 'blocked', type: 'int'},
