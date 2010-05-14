@@ -7,10 +7,23 @@ var config = {
 	max_blocked: 1000,
 	chartLineSize: 1,
 	chartDotSize: 5,
+	//sort by brutes DESC
+	sort: 0,
+
 }
 
 // The names of the parameters we use
 var parameter_names = new Array('min_brutes', 'max_brutes', 'min_failed', 'max_failed', 'min_blocked', 'max_blocked');
+
+//the sort criterias
+var sort_by = {
+	failed_desc: 0,
+	failed_asc: 1,
+	brutes_desc: 2,
+	brutes_asc: 3,
+	blocked_desc: 4,
+	blocked_asc: 5,
+}
 
 Ext.apply(Ext.form.VTypes, {
 	minMaxNumber: function(value, field) {
@@ -111,13 +124,13 @@ Ext.onReady(function () {
 			}));
 
 			charts.push( new Ext.Panel({
-				title: 'servername' + i,
+				title: '&nbsp',
 				bodyBorder: false,
 				style: {
 					float: 'left',
-					'margin-top': 20,
+					'margin-top': 15,
 					'margin-left': 20,
-					'margin-bottom': i <= 1 ? 0 : 20,
+					'margin-bottom': i <= 1 ? 5 : 20,
 					'margin-right': i%2 == 0 ? 0 : 20,
 				},
 				items: 	new Ext.chart.LineChart({
@@ -261,11 +274,16 @@ Ext.onReady(function () {
 		items: [ settings_form ]
 	});
 
+	function changeSortOrder(button) {
+		bigStore.baseParams['sort'] = sort_by[button.id];
+		bigStore.load({params: {start: 0, limit: 4} });
+	}
+
 	var mainPanel = new Ext.Panel({
 		id:'main-panel',
-		title: 'aaa',
+		title: 'Hawk IDS/IPS',
 		width: 944,
-		height: 610,
+		height: 625,
 		renderTo: 'main',
 		style: {
 			'margin-top': '10px',
@@ -278,6 +296,36 @@ Ext.onReady(function () {
 					mySettings.show();
 				}
 			}],
+		tbar:[{
+				text: '<b>Sort by</b>',
+				menu: new Ext.menu.Menu({
+						items: [ {
+							text: 'Brutes ASC',
+							id: 'brutes_asc',
+							handler: changeSortOrder,
+						}, {
+							text: 'Brutes DESC',
+							id: 'brutes_desc',
+							handler: changeSortOrder,
+						}, {
+							text: 'Failed ASC',
+							id: 'failed_asc',
+							handler: changeSortOrder,
+						}, {
+							text: 'Failed DESC',
+							id: 'failed_desc',
+							handler: changeSortOrder,
+						}, {
+							text: 'Blocked ASC',
+							id: 'blocked_asc',
+							handler: changeSortOrder,
+						}, {
+							id: 'blocked_desc',
+							text: 'Blocked DESC',
+							handler: changeSortOrder,
+						}
+					]}),
+		}],
 		bbar:{
 				xtype: 'paging',
 				id: 'pager',
@@ -308,9 +356,9 @@ Ext.onReady(function () {
 						triggerClass: 'x-form-search-trigger',
 						listeners : {
 							specialkey : function (field, event) {
-									if (Ext.EventObject.getKey(event) == event.ENTER) {
+								if (Ext.EventObject.getKey(event) == event.ENTER) {
 									this.search(field.getValue());
-								};
+								}
 							},
 						},
 						onTriggerClick: function(){

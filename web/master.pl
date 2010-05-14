@@ -19,8 +19,18 @@ my $conf_file;
 if (-e '/home/dvd/projects/hawk-commercial/web/web.conf') {
 	$conf_file = '/home/dvd/projects/hawk-commercial/web/web.conf';
 } else {
-	$conf_file = '/home/dvd/etc/web.conf';
+	$conf_file = '/home/sgapi/etc/web.conf';
 }
+
+my @order_criteria = (
+	'failed_sum DESC',
+	'failed_sum ASC',
+	'brutes_sum DESC',
+	'brutes_sum ASC',
+	'blocked_sum DESC',
+	'blocked_sum ASC',
+);
+
 my %config = parse_config($conf_file);
 
 my $get_server_names = '
@@ -35,8 +45,7 @@ my $get_server_names = '
 		max_brutes <= ? AND
 		min_blocked >= ? AND
 		max_blocked <= ?
-	ORDER BY
-		server ASC
+	ORDER BY %s
 	LIMIT %s
 	OFFSET %s
 ';
@@ -66,6 +75,7 @@ my $get_server_info = '
 	WHERE
 		server = ? AND
 		date > now() - interval \'24 hours\'
+	ORDER BY date
 ';
 
 $|=1;
@@ -115,7 +125,7 @@ min_blocked = $min_blocked
 max_blocked = $max_blocked
 
 offset = $offset
-limit = $limit" if param('debug');
+limit = $limit" if param('debug') == 1;
 
 
 if ($max_failed < $min_failed) {
@@ -162,7 +172,11 @@ if (defined(param('server'))) {
 		$min_brutes, $max_brutes,
 		$min_blocked, $max_blocked);
 
-	my $server_names_query = $conn->prepare(sprintf($get_server_names, $limit, $offset));
+	my $order = $order_criteria[0];
+	$order = $order_criteria[$1] if (defined(param('sort')) && param('sort') =~ m/^([0-5])$/);
+
+	print(sprintf($get_server_names, $order, $limit, $offset)) if param('debug') == 1;
+	my $server_names_query = $conn->prepare(sprintf($get_server_names, $order, $limit, $offset));
 	$server_names_query->execute(
 		$min_failed, $max_failed,
 		$min_brutes, $max_brutes,
