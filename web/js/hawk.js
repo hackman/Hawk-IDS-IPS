@@ -274,6 +274,26 @@ Ext.onReady(function () {
 		items: [ settings_form ]
 	});
 
+	var summaryFields = [
+		{ name: 'period',		mapping: 0 },
+		{ name: 'failed',		mapping: 1, type: 'int' },
+		{ name: 'brutes',		mapping: 2, type: 'int' },
+	];
+
+	var summaryColumnModel = [
+		{id: 'period',	header: 'Period', width: 100, sortable: true, dataIndex: 'period', },
+		{				header: 'Failed count', width: 100, sortable: true, dataIndex: 'failed', },
+		{				header: 'Brutes count', width: 100, sortable: true, dataIndex: 'brutes', },
+	];
+
+	var summaryStore = new Ext.data.JsonStore({
+		fields: summaryFields,
+		root: 'data',
+		url: 'master.pl',
+		autoLoad: true,
+		baseParams: {txt: 2},
+	});
+
 	function changeSortOrder(button) {
 		bigStore.baseParams['sort'] = sort_by[button.id];
 		bigStore.load({params: {start: 0, limit: 4} });
@@ -325,6 +345,18 @@ Ext.onReady(function () {
 							handler: changeSortOrder,
 						}
 					]}),
+		}, "->", {
+			text: "Summary",
+			menu: new Ext.menu.Menu({
+				items: new Ext.grid.GridPanel({
+					title: "Summary",
+					store: summaryStore,
+					columns: summaryColumnModel,
+					enableHdMenu: false,
+					viewConfig: { forceFit: true, },
+					height: 100,
+				}),
+			}),
 		}],
 		bbar:{
 				xtype: 'paging',
