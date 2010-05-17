@@ -41,7 +41,7 @@ sub web_error {
 my $conn   = DBI->connect("$config{'db'}", $config{'dbuser'}, $config{'dbpass'}, { PrintError => 1, AutoCommit => 1 } ) or web_error("Unable to connect to pgsql: $DBI::errstr");
 
 my $charts_24h_query = "
-	SELECT COUNT(id), TO_CHAR(date_trunc(\'hour\', date), \'HH:MI\') AS hourly
+	SELECT COUNT(id), TO_CHAR(date_trunc('hour', date), 'HH24:MI') AS hourly
 	FROM %s
 	WHERE \"date\" > (now() - interval \'24 hour\')
 	GROUP BY hourly
