@@ -323,30 +323,34 @@ Ext.onReady(function () {
 				text: '<b>Sort by</b>',
 				menu: new Ext.menu.Menu({
 						items: [ {
-							text: 'Brutes ASC',
+							text: 'Brutes',
 							id: 'brutes_asc',
-//							iconCls: 'xg-hmenu-sort-asc x-menu-item-icon',
-//							icon: 'ext-mb-error',
+							icon: 'extjs/resources/images/default/grid/hmenu-asc.gif',
 							handler: changeSortOrder,
 						}, {
-							text: 'Brutes DESC',
+							text: 'Brutes',
 							id: 'brutes_desc',
+							icon: 'extjs/resources/images/default/grid/hmenu-desc.gif',
 							handler: changeSortOrder,
 						}, {
-							text: 'Failed ASC',
+							text: 'Failed',
 							id: 'failed_asc',
+							icon: 'extjs/resources/images/default/grid/hmenu-asc.gif',
 							handler: changeSortOrder,
 						}, {
-							text: 'Failed DESC',
+							text: 'Failed',
 							id: 'failed_desc',
+							icon: 'extjs/resources/images/default/grid/hmenu-desc.gif',
 							handler: changeSortOrder,
 						}, {
-							text: 'Blocked ASC',
+							text: 'Blocked',
 							id: 'blocked_asc',
+							icon: 'extjs/resources/images/default/grid/hmenu-asc.gif',
 							handler: changeSortOrder,
 						}, {
+							text: 'Blocked',
 							id: 'blocked_desc',
-							text: 'Blocked DESC',
+							icon: 'extjs/resources/images/default/grid/hmenu-desc.gif',
 							handler: changeSortOrder,
 						}
 					]}),

@@ -14,7 +14,7 @@ use parse_config;
 use db_utils;
 use web_error;
 
-my $VERSION = '0.2.4';
+my $VERSION = '0.2.5';
 my $conf_file;
 if (-e '/home/dvd/projects/hawk-commercial/web/web.conf') {
 	$conf_file = '/home/dvd/projects/hawk-commercial/web/web.conf';
@@ -77,7 +77,7 @@ my $get_server_info = '
 	WHERE
 		server = ? AND
 		date > now() - interval \'24 hours\'
-	ORDER BY date
+	ORDER BY date DESC
 ';
 
 my $get_summary_query = '
