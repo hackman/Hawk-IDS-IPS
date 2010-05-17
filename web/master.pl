@@ -14,7 +14,7 @@ use parse_config;
 use db_utils;
 use web_error;
 
-my $VERSION = '0.1.4';
+my $VERSION = '0.2.4';
 my $conf_file;
 if (-e '/home/dvd/projects/hawk-commercial/web/web.conf') {
 	$conf_file = '/home/dvd/projects/hawk-commercial/web/web.conf';
