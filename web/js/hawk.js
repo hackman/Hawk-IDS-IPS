@@ -1,10 +1,10 @@
 var config = {
 	min_brutes: 0,
-	max_brutes: 1000,
+	max_brutes: 10000,
 	min_failed: 0,
-	max_failed: 10000,
+	max_failed: 100000,
 	min_blocked: 0,
-	max_blocked: 1000,
+	max_blocked: 10000,
 	chartLineSize: 1,
 	chartDotSize: 5,
 	//sort by brutes DESC
