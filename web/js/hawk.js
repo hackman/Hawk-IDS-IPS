@@ -284,9 +284,9 @@ var summaryFields = [
 ];
 
 var summaryColumnModel = [
-	{id: 'period',	header: 'Period', width: 100, sortable: true, dataIndex: 'period', },
-	{				header: 'Failed count', width: 100, sortable: true, dataIndex: 'failed', },
-	{				header: 'Brutes count', width: 100, sortable: true, dataIndex: 'brutes', },
+	{id: 'period',	header: 'Period', width: 100, sortable: false, dataIndex: 'period', },
+	{				header: 'Failed count', width: 100, sortable: false, dataIndex: 'failed', },
+	{				header: 'Brutes count', width: 100, sortable: false, dataIndex: 'brutes', },
 ];
 
 var summaryStore = new Ext.data.JsonStore({
@@ -325,6 +325,8 @@ Ext.onReady(function () {
 						items: [ {
 							text: 'Brutes ASC',
 							id: 'brutes_asc',
+//							iconCls: 'xg-hmenu-sort-asc x-menu-item-icon',
+//							icon: 'ext-mb-error',
 							handler: changeSortOrder,
 						}, {
 							text: 'Brutes DESC',
@@ -349,7 +351,7 @@ Ext.onReady(function () {
 						}
 					]}),
 		}, "->", {
-			text: "Summary",
+			text: "<b>Summary</b>",
 			menu: new Ext.menu.Menu({
 				items: new Ext.grid.GridPanel({
 					title: "Summary",
