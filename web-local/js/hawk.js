@@ -1,5 +1,5 @@
-Ext.chart.Chart.CHART_URL = 'ext-3.1.1/resources/charts.swf';
-var base_url = '/~sentry/cgi-bin/web-local/hawk.pl';
+Ext.chart.Chart.CHART_URL = '../js/extjs/resources/charts.swf';
+var base_url = 'hawk.pl';
 
 config = {
 	chartLineSize: 1,
@@ -464,7 +464,7 @@ Ext.onReady(function(){
 			'margin-right': 'auto',
 		},
 		items: [{
-				title: '<a href="http://api.sgvps.net/web/hawk.html">Back to master interface</a>',
+				title: '<a href="http://hawk.sgadmins.com">Back to master interface</a>',
 				items: charts,
 		}]
 	});

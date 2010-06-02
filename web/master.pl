@@ -8,7 +8,7 @@ use JSON::XS;
 if (-e '/home/dvd/projects/local-api/lib/') {
 	use lib '/home/dvd/projects/local-api/lib/';
 } else {
-	use lib '/home/sgapi/lib/';
+	use lib '/home/sysop/shared/lib/';
 }
 use parse_config;
 use db_utils;
@@ -19,7 +19,7 @@ my $conf_file;
 if (-e '/home/dvd/projects/hawk-commercial/web/web.conf') {
 	$conf_file = '/home/dvd/projects/hawk-commercial/web/web.conf';
 } else {
-	$conf_file = '/home/sgapi/etc/web.conf';
+	$conf_file = '/home/sysop/etc/hawk_web.conf';
 }
 
 my @order_criteria = (

@@ -1,3 +1,4 @@
+var base_url = 'master.pl';
 var config = {
 	min_brutes: 0,
 	max_brutes: 10000,
@@ -68,7 +69,7 @@ var stores = new Array();
 var charts = new Array();
 
 var bigStore = new Ext.data.JsonStore({
-	url: 'master.pl',
+	url: base_url,
 	baseParams: {
 		txt: 1,
 	//	debug: 1,
@@ -92,8 +93,8 @@ var bigStore = new Ext.data.JsonStore({
 			showCharts(bigStore.getCount());
 			for (i=0; i < bigStore.getCount(); i++) {
 				stores[i].loadData(bigStore.getAt(i).data.chartData);
-				charts[i].setTitle('<a href="http://' + bigStore.getAt(i).data.serverName +
-					'/~sentry/web-local/hawk.html">' + bigStore.getAt(i).data.serverName + '</a>');
+				charts[i].setTitle('<a href="http://api.' + bigStore.getAt(i).data.serverName +
+					'/hawk">' + bigStore.getAt(i).data.serverName + '</a>');
 			}
 			hideCharts(bigStore.getCount());
 		}
@@ -138,7 +139,7 @@ function showCharts(count) {
 			},
 			items: 	new Ext.chart.LineChart({
 				store: stores[i],
-				url:'ext-3.1.1/resources/charts.swf',
+				url:'js/extjs/resources/charts.swf',
 				xField: 'hour',
 				height: '220px',
 				width: '438px',
@@ -292,7 +293,7 @@ var summaryColumnModel = [
 var summaryStore = new Ext.data.JsonStore({
 	fields: summaryFields,
 	root: 'data',
-	url: 'master.pl',
+	url: base_url,
 	autoLoad: true,
 	baseParams: {txt: 2},
 });
