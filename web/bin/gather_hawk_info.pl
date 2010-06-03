@@ -8,7 +8,7 @@ use lib '/home/sgapi/lib';
 use parse_config;
 use db_utils;
 
-my $VERSION = '0.0.1';
+my $VERSION = '0.0.2';
 
 my $config_file = '/home/sgapi/etc/web.conf';
 
@@ -61,6 +61,10 @@ sub get_server_info {
 		return undef;
 	}
 	print "$name - $response\n" if $config{'debug'};
+	if ($response !~ m/^[0-9:|]+/) {
+		printf(STDERR "$name returned a bad json: $response\n");
+		return [0, 0, 0];
+	}
 	my @result;
 	@result = split(/\|/,$response);
 	if ($#result < 3) {
