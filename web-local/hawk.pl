@@ -50,14 +50,30 @@ my $charts_24h_query = "
 my $brutes_24h = $conn->prepare('
 	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service
 	FROM broots
-	WHERE date > now() - interval \'24 hours\';
+	WHERE date > now() - interval \'24 hours\'
+	OFFSET ?
+	LIMIT ?
 ');
+
+my $brutes_24h_count = "
+	SELECT COUNT(ip)
+	FROM broots
+	WHERE date > now() - interval \'24 hours\';
+";
 
 my $failed_24h = $conn->prepare('
 	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service, "user"
 	FROM failed_log
-	WHERE date > now() - interval \'24 hours\';
+	WHERE date > now() - interval \'24 hours\'
+	OFFSET ?
+	LIMIT ?
 ');
+
+my $failed_24h_count = "
+	SELECT COUNT(ip)
+	FROM failed_log
+	WHERE date > now() - interval \'24 hours\'
+";
 
 my $brutes_count = $conn->prepare('
 	SELECT COUNT(id), service
@@ -80,6 +96,13 @@ my $brutes_summary_query = "
 	GROUP BY ip;
 ";
 
+my $failed_summary_query = "
+	SELECT COUNT(id), ip
+	FROM failed_log
+	WHERE date > now() - interval '%s'
+	GROUP BY ip;
+";
+
 my $select_blocked = $conn->prepare('
 	SELECT TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'), TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'), ip, reason
 	FROM blacklist
@@ -91,6 +114,27 @@ my $failed_ip_query = "
 	FROM failed_log
 	WHERE date > now() - interval '%s'
 	AND ip=?;
+";
+
+my $select_blocked = $conn->prepare('
+	SELECT
+		date_add,
+		date_rem,
+		ip,
+		reason
+	FROM
+		blacklist
+	ORDER BY
+		date_add DESC
+	OFFSET ?
+	LIMIT ?
+');
+
+my $get_blocked_count = "
+	SELECT
+		COUNT(ip)
+	FROM
+		blacklist
 ";
 
 if (defined(param('id'))) {
@@ -127,11 +171,11 @@ if (defined(param('id'))) {
 	} elsif ($id == 2) {
 		if (defined(param('interval'))) {
 			my $interval = param('interval');
-			my $brutes_summary = $conn->prepare(sprintf($brutes_summary_query, $interval));
-			$brutes_summary->execute() or web_error("Unable to get bruteforce summary from database: $DBI::errstr");
+			my $failed_summary = $conn->prepare(sprintf($failed_summary_query, $interval));
+			$failed_summary->execute() or web_error("Unable to get bruteforce summary from database: $DBI::errstr");
 			my $count = 0;
 			my @summary = ();
-			while (my @data = $brutes_summary->fetchrow_array) {
+			while (my @data = $failed_summary->fetchrow_array) {
 				$summary[$count] = [@data];
 				$count++;
 			}
@@ -167,26 +211,27 @@ if (defined(param('id'))) {
 			print $json->encode(\@charts);
 		}
 	} elsif ($id == 4) {
-		$brutes_24h->execute() or web_error("Unable to get brutes 24h from database: $DBI::errstr");
-		my $count = 0;
-		my @brutes = ();
+		my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
+		my $offset = (param('start') =~ /^([0-9]+)$/) ? $1 : 0;
+		my %result;
+		$result{'total'} = $conn->selectrow_array($brutes_24h_count);
+		$brutes_24h->execute($offset, $limit) or web_error("Unable to get brutes 24h from database: $DBI::errstr");
 		while (my @data = $brutes_24h->fetchrow_array) {
-			$brutes[$count] = [@data];
-			$count++;
+			push(@{$result{'data'}}, [@data]);
 		}
 		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
-		print $json->encode(\@brutes);
+		print $json->encode(\%result);
 	} elsif ($id == 5) {
-		$failed_24h->execute() or web_error("Unable to get failed 24h from database: $DBI::errstr");
-		my $count = 0;
-		my @failed = ();
+		my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
+		my $offset = (param('start') =~ /^([0-9]+)$/) ? $1 : 0;
+		my %result;
+		$result{'total'} = $conn->selectrow_array($failed_24h_count);
+		$failed_24h->execute($offset, $limit) or web_error("Unable to get failed 24h from database: $DBI::errstr");
 		while (my @data = $failed_24h->fetchrow_array) {
-			$data[2] = $srvhash{$data[2]};
-			$failed[$count] = [@data];
-			$count++;
+			push(@{$result{'data'}}, [@data]);
 		}
 		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
-		print $json->encode(\@failed);
+		print $json->encode(\%result);
 	} elsif ($id == 6) {
 		if (defined(param('ip'))) {
 			my $ip = param('ip');
@@ -243,6 +288,17 @@ if (defined(param('id'))) {
 			my $json = JSON::XS->new->ascii->pretty->allow_nonref;
 			print $json->encode(\@failed);
 		}
+	} elsif ($id == 9) {
+		my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
+		my $offset = (param('start') =~ /^([0-9]+)$/) ? $1 : 0;
+		my %result;
+		$result{'total'} = $conn->selectrow_array($get_blocked_count);
+		$select_blocked->execute($offset, $limit) or web_error("Could not get blocked ips: $DBI::errstr\n");
+		while (my @data = $select_blocked->fetchrow_array()) {
+			push(@{$result{'data'}}, [@data]);
+		}
+		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
+		print $json->encode(\%result);
 	}
 } else {
 	print "Content-type: text/plain\r\n\r\n";

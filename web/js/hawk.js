@@ -326,32 +326,32 @@ Ext.onReady(function () {
 						items: [ {
 							text: 'Brutes',
 							id: 'brutes_asc',
-							icon: 'extjs/resources/images/default/grid/hmenu-asc.gif',
+							icon: 'js/extjs/resources/images/default/grid/hmenu-asc.gif',
 							handler: changeSortOrder,
 						}, {
 							text: 'Brutes',
 							id: 'brutes_desc',
-							icon: 'extjs/resources/images/default/grid/hmenu-desc.gif',
+							icon: 'js/extjs/resources/images/default/grid/hmenu-desc.gif',
 							handler: changeSortOrder,
 						}, {
 							text: 'Failed',
 							id: 'failed_asc',
-							icon: 'extjs/resources/images/default/grid/hmenu-asc.gif',
+							icon: 'js/extjs/resources/images/default/grid/hmenu-asc.gif',
 							handler: changeSortOrder,
 						}, {
 							text: 'Failed',
 							id: 'failed_desc',
-							icon: 'extjs/resources/images/default/grid/hmenu-desc.gif',
+							icon: 'js/extjs/resources/images/default/grid/hmenu-desc.gif',
 							handler: changeSortOrder,
 						}, {
 							text: 'Blocked',
 							id: 'blocked_asc',
-							icon: 'extjs/resources/images/default/grid/hmenu-asc.gif',
+							icon: 'js/extjs/resources/images/default/grid/hmenu-asc.gif',
 							handler: changeSortOrder,
 						}, {
 							text: 'Blocked',
 							id: 'blocked_desc',
-							icon: 'extjs/resources/images/default/grid/hmenu-desc.gif',
+							icon: 'js/extjs/resources/images/default/grid/hmenu-desc.gif',
 							handler: changeSortOrder,
 						}
 					]}),

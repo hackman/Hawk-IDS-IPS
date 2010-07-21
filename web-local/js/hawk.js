@@ -8,10 +8,13 @@ config = {
 
 var CommonWin = new Ext.Window({
 	width:800,
-	height:400,
+	//height:400,
+	autoHeight: true,
 	shadow: true,
 	resizable: false,
-	closeAction: 'hide'
+	closeAction: 'hide',
+	modal: true,
+	bbar: {}
 });
 
 function CreateLink(value, action) {
@@ -32,6 +35,8 @@ function Show_Brutes() {
 		baseParams: {
 			id: '4'
 		},
+		root: 'data',
+		totalProperty: 'total',
 		fields: [
 			{name: 'date', mapping: 0},
 			{name: 'ip', mapping: 1},
@@ -48,32 +53,41 @@ function Show_Brutes() {
 						icon: 'ext-mb-info'
 					});
 					return;
-				} else {
-					var brutes_grid = new Ext.grid.GridPanel({
-						store: brutes_store,
-						columns: [
-							{header: 'Date', width: 250},
-							{header: 'IP address', width: 250},
-							{header: 'Service', width: 250}
-						],
-						width: 750,
-						height: 400,
-						layout: 'fit',
-						style: {
-							'margin-top': '10px',
-							'margin-left': 'auto',
-							'margin-right': 'auto',
-						}
-					});
-					CommonWin.removeAll();
-					CommonWin.title = 'Bruteforce attempts (24 hrs only)';
-					CommonWin.add(brutes_grid);
-					CommonWin.doLayout();
-					CommonWin.show();
 				}
 			}
 		}
 	});
+
+	var brutes_grid = new Ext.grid.GridPanel({
+		store: brutes_store,
+		columns: [
+			{header: 'Date', width: 250},
+			{header: 'IP address', width: 250},
+			{header: 'Service', width: 250}
+		],
+		width: 750,
+		height: 400,
+		layout: 'fit',
+		style: {
+			'margin-top': '10px',
+			'margin-left': 'auto',
+			'margin-right': 'auto',
+		},
+		bbar: {
+			xtype: 'paging',
+			id: 'pager',
+			store: brutes_store,
+			pageSize: 20,
+			displayInfo: true,
+			displayMsg: '',
+			emptyMsg: ''
+		}
+	});
+	CommonWin.removeAll();
+	CommonWin.setTitle('Bruteforce attempts (24 hrs only)');
+	CommonWin.add(brutes_grid);
+	CommonWin.doLayout();
+	CommonWin.show();
 }
 
 function Show_Failed() {
@@ -90,6 +104,8 @@ function Show_Failed() {
 		baseParams: {
 			id: '5'
 		},
+		root: 'data',
+		totalProperty: 'total',
 		fields: [
 			{name: 'date', mapping: 0},
 			{name: 'ip', mapping: 1},
@@ -107,34 +123,42 @@ function Show_Failed() {
 						icon: 'ext-mb-info'
 					});
 					return;
-				} else {
-					var failed_grid = new Ext.grid.GridPanel({
-						store: failed_store,
-						columns: [
-							{header: 'Date', width: 195},
-							{header: 'IP address', width: 195},
-							{header: 'Service', width: 195},
-							{header: 'Username', width: 195}
-						],
-						width: 750,
-						height: 400,
-						layout: 'fit',
-						style: {
-							'margin-top': '10px',
-							'margin-left': 'auto',
-							'margin-right': 'auto',
-						}
-					});
-
-					CommonWin.removeAll();
-					CommonWin.title = 'Failed attempts (24 hrs only)';
-					CommonWin.add(failed_grid);
-					CommonWin.doLayout();
-					CommonWin.show();
 				}
 			}
 		}
 	});
+	var failed_grid = new Ext.grid.GridPanel({
+		store: failed_store,
+		columns: [
+			{header: 'Date', width: 195},
+			{header: 'IP address', width: 195},
+			{header: 'Service', width: 195},
+			{header: 'Username', width: 195}
+		],
+		width: 750,
+		height: 400,
+		layout: 'fit',
+		style: {
+			'margin-top': '10px',
+			'margin-left': 'auto',
+			'margin-right': 'auto',
+		},
+		bbar: {
+			xtype: 'paging',
+			id: 'pager',
+			store: failed_store,
+			pageSize: 20,
+			displayInfo: true,
+			displayMsg: '',
+			emptyMsg: ''
+		}
+	});
+
+	CommonWin.removeAll();
+	CommonWin.setTitle('Failed attempts (24 hrs only)');
+	CommonWin.add(failed_grid);
+	CommonWin.doLayout();
+	CommonWin.show();
 }
 
 function ShowResults(ipaddr) {
@@ -266,7 +290,7 @@ function ShowResults(ipaddr) {
 			        })
 				});
 				CommonWin.removeAll();
-				CommonWin.title = 'Results';
+				CommonWin.setTitle('Results');
 				CommonWin.add([ search_grid, chart ]);
 				CommonWin.doLayout();
 				CommonWin.show();
@@ -323,7 +347,7 @@ function Show_Services(type) {
 					});
 
 					CommonWin.removeAll();
-					CommonWin.title = 'Bruteforce attempts (24 hrs only)';
+					CommonWin.setTitle('Bruteforce attempts (24 hrs only)');
 					CommonWin.add(services_grid);
 					CommonWin.doLayout();
 					CommonWin.show();
@@ -387,7 +411,7 @@ function Show_IP_Details(ipaddr, interval) {
 					});
 
 					CommonWin.removeAll();
-					CommonWin.title = 'IP address details';
+					CommonWin.setTitle('IP address details');
 					CommonWin.add(details_grid);
 					CommonWin.doLayout();
 					CommonWin.show();
@@ -395,6 +419,76 @@ function Show_IP_Details(ipaddr, interval) {
 			}
 		}
 	});
+}
+
+function showBlocked() {
+	Ext.MessageBox.show({
+		msg: 'Loading, please wait...',
+		progressText: 'Loading...',
+		width:300,
+		wait:true,
+		waitConfig: {interval:200},
+	});
+	var blocked_store = new Ext.data.JsonStore({
+		autoLoad: true,
+		url: base_url,
+		baseParams: {
+			id: '9',
+		},
+		root: 'data',
+		totalProperty: 'total',
+		fields: [
+			{name: 'date_from', mapping: 0},
+			{name: 'date_to', mapping: 1},
+			{name: 'ip_addr', mapping: 2},
+			{name: 'reason', mapping: 3}
+		],
+		listeners: {
+			load: function() {
+				Ext.MessageBox.hide();
+				if (blocked_store.getCount() == 0) {
+					Ext.MessageBox.show({
+						title: 'Info',
+						msg: 'Entry not found!',
+						buttons: Ext.MessageBox.OK,
+						icon: 'ext-mb-info'
+					});
+					return;
+				} 
+			}
+		}
+	});
+	var blocked_grid = new Ext.grid.GridPanel({
+		store: blocked_store,
+		columns: [
+			{header: 'From date', width: 195},
+			{header: 'To date', width: 195},
+			{header: 'IP address', width: 195},
+			{header: 'Reason', width: 195}
+		],
+		width: 750,
+		height: 400,
+		layout: 'fit',
+		style: {
+			'margin-top': '10px',
+			'margin-left': 'auto',
+			'margin-right': 'auto',
+		},
+		bbar: {
+			xtype: 'paging',
+			id: 'pager',
+			store: blocked_store,
+			pageSize: 20,
+			displayInfo: true,
+			displayMsg: '',
+			emptyMsg: ''
+		}
+	});
+	CommonWin.removeAll();
+	CommonWin.setTitle('Blocked IP addresses');
+	CommonWin.add(blocked_grid);
+	CommonWin.doLayout();
+	CommonWin.show();
 }
 
 Ext.onReady(function(){
@@ -455,7 +549,7 @@ Ext.onReady(function(){
 	var chartsPanel = new Ext.Panel({
 		id:'charts-panel',
 		width: 905,
-		height: 260,
+		height: 300,
 		layout: 'fit',
 		renderTo: 'main',
 		style: {
@@ -466,13 +560,37 @@ Ext.onReady(function(){
 		items: [{
 				title: '<a href="http://hawk.sgadmins.com">Back to master interface</a>',
 				items: charts,
-		}]
+		}],
+		bbar:{
+			items: ['-','<label for="ipaddr">Search for blocked IP address: </label>',
+				new Ext.form.TriggerField({
+					id: 'ipaddr',
+					name: 'ipaddr',
+					fieldLabel: 'Search for blocked IP address',
+					labelStyle: 'font-case:lower;',
+					//allowBlank:false,
+					triggerClass: 'x-form-search-trigger',
+					listeners : {
+						specialkey : function(field, event) {
+							if (Ext.EventObject.getKey(event) == event.ENTER) {
+								ShowResults(field.getValue());
+							};
+						},
+					},
+					onTriggerClick: function(field) {
+						ShowResults(this.getValue());
+					}
+				}), '->', {
+					html: '<a href="javascript:void(0)" onClick="showBlocked()">Show all blocked IPs</a>'
+				}, '-'
+			]
+		}
 	});
 	
 	Ext.QuickTips.init();
 	Ext.form.Field.prototype.msgTarget = 'side';
-	var SearchIP = new Ext.FormPanel({
-		labelWidth: 75,
+	/*var SearchIP = new Ext.FormPanel({
+		labelWidth: 200,
 		frame:true,
 		style: {
 			'margin-top': 'auto',
@@ -488,7 +606,7 @@ Ext.onReady(function(){
 		items: new Ext.form.TriggerField({
 			id: 'ipaddr',
 			name: 'ipaddr',
-			fieldLabel: 'IP address',
+			fieldLabel: 'Search for blocked IP address',
 			labelStyle: 'font-case:lower;',
 			//allowBlank:false,
 			triggerClass: 'x-form-search-trigger',
@@ -502,8 +620,11 @@ Ext.onReady(function(){
 			onTriggerClick: function(field) {
 				ShowResults(this.getValue());
 			}
-		})
-	});
+		}),
+			html: '<a href="javascript:void(0)" onClick="alert(\'hui\')">Show all blocked IPs</a>', handler: function() {
+				alert('hui');
+			}
+	});*/
 	
 	var brute_store = new Ext.data.JsonStore({
 		autoLoad: true,
@@ -581,10 +702,11 @@ Ext.onReady(function(){
 				interval: summaryObj.options[i].interval
 			},
 			fields: [
-				{name: 'count', mapping: 0},
+				{name: 'count', mapping: 0, type: 'int'},
 				{name: 'ip', mapping: 1}
 			]
 		});
+		summary_store.setDefaultSort('count', 'desc');
 	
 		summary_grid.push(new Ext.grid.GridPanel({
 				store: summary_store,
