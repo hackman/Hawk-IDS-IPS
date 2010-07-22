@@ -57,21 +57,26 @@ function Show_Brutes() {
 			}
 		}
 	});
-
+	
+	brutes_store.setDefaultSort('date', 'desc');
+	
 	var brutes_grid = new Ext.grid.GridPanel({
 		store: brutes_store,
 		columns: [
-			{header: 'Date', width: 250},
-			{header: 'IP address', width: 250},
-			{header: 'Service', width: 250}
+			{header: 'Date', sortable: true, width: 250, dataIndex: 'date'},
+			{header: 'IP address', sortable: true, width: 250, dataIndex: 'ip'},
+			{header: 'Service', sortable: true, width: 240, dataIndex: 'service'}
 		],
 		width: 750,
-		height: 400,
+		height: 480,
+		viewConfig: { forceFit: true },
+		loadMask: true,
 		layout: 'fit',
 		style: {
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
+			'margin-bottom': '10px',
 		},
 		bbar: {
 			xtype: 'paging',
@@ -127,21 +132,26 @@ function Show_Failed() {
 			}
 		}
 	});
+	failed_store.setDefaultSort('date', 'desc');
+	
 	var failed_grid = new Ext.grid.GridPanel({
 		store: failed_store,
 		columns: [
-			{header: 'Date', width: 195},
-			{header: 'IP address', width: 195},
-			{header: 'Service', width: 195},
-			{header: 'Username', width: 195}
+			{header: 'Date', width: 195, sortable: true, dataIndex: 'date'},
+			{header: 'IP address', width: 195, sortable: true, dataIndex: 'ip'},
+			{header: 'Service', width: 195, sortable: true, dataIndex: 'service'},
+			{header: 'Username', width: 195, sortable: true, dataIndex: 'username'}
 		],
 		width: 750,
-		height: 400,
+		height: 480,
 		layout: 'fit',
+		viewConfig: { forceFit: true },
+		loadMask: true,
 		style: {
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
+			'margin-bottom': '10px',
 		},
 		bbar: {
 			xtype: 'paging',
@@ -234,6 +244,8 @@ function ShowResults(ipaddr) {
 					width: 800,
 					height: 50,
 					layout: 'fit',
+					viewConfig: { forceFit: true },
+					loadMask: true,
 					style: {
 						'margin-top': '10px',
 						'margin-left': 'auto',
@@ -337,8 +349,10 @@ function Show_Services(type) {
 							{header: 'IP address', width: 195}
 						],
 						width: 750,
-						height: 400,
+						height: 480,
 						layout: 'fit',
+						viewConfig: { forceFit: true },
+						loadMask: true,
 						style: {
 							'margin-top': '10px',
 							'margin-left': 'auto',
@@ -358,7 +372,6 @@ function Show_Services(type) {
 }
 
 function Show_IP_Details(ipaddr, interval) {
-	//alert(ipaddr + " " + interval);
 	Ext.MessageBox.show({
 		msg: 'Loading, please wait...',
 		progressText: 'Loading...',
@@ -372,8 +385,10 @@ function Show_IP_Details(ipaddr, interval) {
 		baseParams: {
 			id: '8',
 			interval: interval,
-			ip: ipaddr
+			ip: ipaddr,
 		},
+		root: 'data',
+		totalProperty: 'total',
 		fields: [
 			{name: 'date', mapping: 0},
 			{name: 'ip', mapping: 1},
@@ -391,34 +406,47 @@ function Show_IP_Details(ipaddr, interval) {
 						icon: 'ext-mb-info'
 					});
 					return;
-				} else {
-					var details_grid = new Ext.grid.GridPanel({
-						store: details_store,
-						columns: [
-							{header: 'Date', width: 195},
-							{header: 'IP address', width: 195},
-							{header: 'Username', width: 195},
-							{header: 'Service', width: 195}
-						],
-						width: 750,
-						height: 400,
-						layout: 'fit',
-						style: {
-							'margin-top': '10px',
-							'margin-left': 'auto',
-							'margin-right': 'auto',
-						}
-					});
-
-					CommonWin.removeAll();
-					CommonWin.setTitle('IP address details');
-					CommonWin.add(details_grid);
-					CommonWin.doLayout();
-					CommonWin.show();
 				}
 			}
 		}
 	});
+	details_store.setDefaultSort('date', 'desc');
+	
+	var details_grid = new Ext.grid.GridPanel({
+		store: details_store,
+		columns: [
+			{header: 'Date', width: 195, sortable: true, dataIndex: 'date'},
+			{header: 'IP address', width: 195, sortable: true, dataIndex: 'ip'},
+			{header: 'Username', width: 195, sortable: true, dataIndex: 'username'},
+			{header: 'Service', width: 195, sortable: true, dataIndex: 'service'}
+		],
+		width: 750,
+		height: 480,
+		layout: 'fit',
+		viewConfig: { forceFit: true },
+		loadMask: true,
+		style: {
+			'margin-top': '10px',
+			'margin-left': 'auto',
+			'margin-right': 'auto',
+			'margin-bottom': '10px'
+		},
+		bbar: {
+			xtype: 'paging',
+			id: 'pager',
+			store: details_store,
+			pageSize: 20,
+			displayInfo: true,
+			displayMsg: '',
+			emptyMsg: ''
+		}
+	});
+
+	CommonWin.removeAll();
+	CommonWin.setTitle('IP address details');
+	CommonWin.add(details_grid);
+	CommonWin.doLayout();
+	CommonWin.show();
 }
 
 function showBlocked() {
@@ -458,21 +486,33 @@ function showBlocked() {
 			}
 		}
 	});
+	blocked_store.setDefaultSort('date_from', 'desc');
+	
 	var blocked_grid = new Ext.grid.GridPanel({
 		store: blocked_store,
 		columns: [
-			{header: 'From date', width: 195},
-			{header: 'To date', width: 195},
-			{header: 'IP address', width: 195},
-			{header: 'Reason', width: 195}
+			{header: 'From date', width: 150, sortable: true, dataIndex: 'date_from'},
+			{header: 'To date', width: 150, sortable: true, dataIndex: 'date_to', renderer: function(value) {
+					if (!value) {
+						return "still active";
+					} else {
+						return value;
+					}
+				}
+			},
+			{header: 'IP address', width: 135, sortable: true, dataIndex: 'ip_addr'},
+			{header: 'Reason', width: 315, sortable: true, dataIndex: 'reason'}
 		],
 		width: 750,
-		height: 400,
+		height: 480,
 		layout: 'fit',
+		viewConfig: { forceFit: true },
+		loadMask: true,
 		style: {
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
+			'margin-bottom': '10px',
 		},
 		bbar: {
 			xtype: 'paging',
@@ -581,50 +621,15 @@ Ext.onReady(function(){
 						ShowResults(this.getValue());
 					}
 				}), '->', {
-					html: '<a href="javascript:void(0)" onClick="showBlocked()">Show all blocked IPs</a>'
+						text: 'Show all blocked IPs',
+						icon: 'images/blocked.gif',
+						handler: function() {
+							showBlocked();
+						}
 				}, '-'
 			]
 		}
 	});
-	
-	Ext.QuickTips.init();
-	Ext.form.Field.prototype.msgTarget = 'side';
-	/*var SearchIP = new Ext.FormPanel({
-		labelWidth: 200,
-		frame:true,
-		style: {
-			'margin-top': 'auto',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
-		},
-		//title: 'IP address search',
-		bodyStyle:'padding:5px 5px 0px',
-		width: 905,
-		defaults: {width: 200},
-		defaultType: 'textfield',
-		renderTo: 'main',
-		items: new Ext.form.TriggerField({
-			id: 'ipaddr',
-			name: 'ipaddr',
-			fieldLabel: 'Search for blocked IP address',
-			labelStyle: 'font-case:lower;',
-			//allowBlank:false,
-			triggerClass: 'x-form-search-trigger',
-			listeners : {
-				specialkey : function(field, event) {
-					if (Ext.EventObject.getKey(event) == event.ENTER) {
-						ShowResults(field.getValue());
-					};
-				},
-			},
-			onTriggerClick: function(field) {
-				ShowResults(this.getValue());
-			}
-		}),
-			html: '<a href="javascript:void(0)" onClick="alert(\'hui\')">Show all blocked IPs</a>', handler: function() {
-				alert('hui');
-			}
-	});*/
 	
 	var brute_store = new Ext.data.JsonStore({
 		autoLoad: true,
@@ -675,6 +680,8 @@ Ext.onReady(function(){
 		width: 905,
 		height: 70,
 		layout: 'fit',
+		viewConfig: { forceFit: true },
+		loadMask: true,
 		style: {
 			'margin-top': 'auto',
 			'margin-left': 'auto',
@@ -716,6 +723,8 @@ Ext.onReady(function(){
 				],
 				width: 290,
 				height: 265,
+				viewConfig: { forceFit: true },
+				loadMask: true,
 				style: {
 					float: 'left',
 					'margin': 5

@@ -103,7 +103,7 @@ my $failed_summary_query = "
 	GROUP BY ip;
 ";
 
-my $select_blocked = $conn->prepare('
+my $select_blocked_ip = $conn->prepare('
 	SELECT TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'), TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'), ip, reason
 	FROM blacklist
 	WHERE ip=?
@@ -113,13 +113,22 @@ my $failed_ip_query = "
 	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, \"user\", service
 	FROM failed_log
 	WHERE date > now() - interval '%s'
-	AND ip=?;
+	AND ip=?
+	OFFSET ?
+	LIMIT ?
+";
+
+my $failed_ip_query_count = "
+	SELECT COUNT(ip)
+	FROM failed_log
+	WHERE date > now() - interval '%s'
+	AND ip=?
 ";
 
 my $select_blocked = $conn->prepare('
 	SELECT
-		date_add,
-		date_rem,
+		TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'),
+		TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'),
 		ip,
 		reason
 	FROM
@@ -228,6 +237,7 @@ if (defined(param('id'))) {
 		$result{'total'} = $conn->selectrow_array($failed_24h_count);
 		$failed_24h->execute($offset, $limit) or web_error("Unable to get failed 24h from database: $DBI::errstr");
 		while (my @data = $failed_24h->fetchrow_array) {
+			$data[2] = $srvhash{$data[2]};
 			push(@{$result{'data'}}, [@data]);
 		}
 		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
@@ -235,10 +245,10 @@ if (defined(param('id'))) {
 	} elsif ($id == 6) {
 		if (defined(param('ip'))) {
 			my $ip = param('ip');
-			$select_blocked->execute($ip) or web_error("Unable to get IP address from database: $DBI::errstr");
+			$select_blocked_ip->execute($ip) or web_error("Unable to get IP address from database: $DBI::errstr");
 			my $count = 0;
 			my @result = ();
-			while (my @data = $select_blocked->fetchrow_array) {
+			while (my @data = $select_blocked_ip->fetchrow_array) {
 				$result[$count] = [@data];
 				$count++;
 			}
@@ -276,17 +286,18 @@ if (defined(param('id'))) {
 		if (defined(param('interval')) && defined(param('ip'))) {
 			my $interval = param('interval');
 			my $ip = param('ip');
+			my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
+			my $offset = (param('start') =~ /^([0-9]+)$/) ? $1 : 0;
+			my %result;
+			$result{'total'} = $conn->selectrow_array(sprintf($failed_ip_query_count, $interval), undef, $ip);
 			my $failed_ip = $conn->prepare(sprintf($failed_ip_query, $interval));
-			$failed_ip->execute($ip) or web_error("Unable to get failed ip from database: $DBI::errstr");
-			my $count = 0;
-			my @failed = ();
+			$failed_ip->execute($ip, $offset, $limit) or web_error("Unable to get failed ip from database: $DBI::errstr");
 			while (my @data = $failed_ip->fetchrow_array) {
 				$data[3] = $srvhash{$data[3]};
-				$failed[$count] = [@data];
-				$count++;
+				push(@{$result{'data'}}, [@data]);
 			}
 			my $json = JSON::XS->new->ascii->pretty->allow_nonref;
-			print $json->encode(\@failed);
+			print $json->encode(\%result);
 		}
 	} elsif ($id == 9) {
 		my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
