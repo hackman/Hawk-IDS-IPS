@@ -554,6 +554,7 @@ Ext.onReady(function(){
 				{name: 'hour', mapping: 1}
 			]
 		});
+
 		charts.push(new Ext.Panel({
 				title: chartsObj.options[j].title,
 				width:440,

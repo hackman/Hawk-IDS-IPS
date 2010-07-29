@@ -48,7 +48,7 @@ my $charts_24h_query = "
 ";
 
 my $brutes_24h = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH24:MI:SS\'), ip, service
 	FROM broots
 	WHERE date > now() - interval \'24 hours\'
 	OFFSET ?
@@ -62,7 +62,7 @@ my $brutes_24h_count = "
 ";
 
 my $failed_24h = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service, "user"
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH24:MI:SS\'), ip, service, "user"
 	FROM failed_log
 	WHERE date > now() - interval \'24 hours\'
 	OFFSET ?
@@ -83,7 +83,7 @@ my $brutes_count = $conn->prepare('
 ');
 
 my $select_brutes = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH24:MI:SS\'), ip
 	FROM broots
 	WHERE date > now() - interval \'24 hour\'
 	AND service = ?
@@ -104,13 +104,13 @@ my $failed_summary_query = "
 ";
 
 my $select_blocked_ip = $conn->prepare('
-	SELECT TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'), TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'), ip, reason
+	SELECT TO_CHAR(date_add, \'YYYY-MM-DD HH24:MI:SS\'), TO_CHAR(date_rem, \'YYYY-MM-DD HH24:MI:SS\'), ip, reason
 	FROM blacklist
 	WHERE ip=?
 ');
 
 my $failed_ip_query = "
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, \"user\", service
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH24:MI:SS\'), ip, \"user\", service
 	FROM failed_log
 	WHERE date > now() - interval '%s'
 	AND ip=?
@@ -127,8 +127,8 @@ my $failed_ip_query_count = "
 
 my $select_blocked = $conn->prepare('
 	SELECT
-		TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'),
-		TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'),
+		TO_CHAR(date_add, \'YYYY-MM-DD HH24:MI:SS\'),
+		TO_CHAR(date_rem, \'YYYY-MM-DD HH24:MI:SS\'),
 		ip,
 		reason
 	FROM
@@ -216,8 +216,9 @@ if (defined(param('id'))) {
 					push(@charts, [0, $new]);
 				}
 			}
+			my @reversed = reverse(@charts); 
 			my $json = JSON::XS->new->ascii->pretty->allow_nonref;
-			print $json->encode(\@charts);
+			print $json->encode(\@reversed);
 		}
 	} elsif ($id == 4) {
 		my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
