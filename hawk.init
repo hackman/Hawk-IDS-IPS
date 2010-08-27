@@ -1,10 +1,20 @@
 #!/bin/bash
-# Hawk init script
+#                                                                     
+# hawk
+#	SiteGround Bruteforce attacks intrusion protection and logging system.
+#                                                                     
+# chkconfig: 2345 99 17                                               
+# description: SiteGround hawk daemon monitors various files for unsuccessfull login attempts, block the offenders and store the attack info in a database
+# probe: true     
+# version: 1.1
 
-VERSION='2.4'
-hawkurl='http://master.sgvps.net/hawk-commercial/'
+VERSION='3.0'
+hawkurl='http://sw.sgadmins.com/hawk/'
 pidfile='/var/run/hawk.pid'
-program='/usr/local/sbin/hawk.pl'
+program='/home/oneh/api/sbin/hawk.pl'
+cron_program='/home/oneh/api/bin/hawk-blocker.sh'
+conf='/home/oneh/api/etc/hawk.conf'
+
 check_status() {
 	check=0;
 	okcount=0;
@@ -38,8 +48,37 @@ check_status() {
 		echo -e "FAILED"
 	fi
 }
+
 # Starting Hawk
 start_program() {
+	# TODO
+	#	Make sure that the in_hawk exists and create it if needed
+	#	Make sure to load block_list from /home/oneh/api/etc/hawk.conf only if block is executable!
+	echo -n "Checking if in_hawk exists ... "
+	if ( ! iptables -t filter -L in_hawk -n >> /dev/null 2>&1 ); then
+		echo -n "[ NO ] ... "
+		if ( ! iptables -t filter -N in_hawk ); then
+			echo "iptables -t filter -N in_hawk FAILED"
+			exit 1
+		fi
+		if ( ! iptables -I INPUT -j in_hawk ); then
+			echo "iptables -I INPUT -j in_hawk FAILED"
+			exit 1
+		fi
+		echo "[ CREATED ]"
+	else
+		echo "[ YES ]"
+	fi
+	block_list=$(awk -F = '/block_list/{print $2}' $conf)
+	if [ -x "$block_list" ]; then
+		echo -n "Restoring the rules from $block_list ... "
+		if ( ! $block_list ); then
+			echo "[ FAILED ]"
+		else
+			echo "[ OK ]"
+		fi
+	fi
+
 	if [ -x $program ]; then
 		if [ "$1" == 'debug' ]; then
 			$program debug
@@ -61,6 +100,7 @@ stop_program() {
 		fi
 	  	rm -f $pidfile
 	fi
+	pkill -f Hawk >> /dev/null 2>&1
 	check_status 1
 }
 
@@ -79,121 +119,18 @@ check_run() {
 change_hawk_pass() {
 	echo "Changing Hawk password"
 	newpass=$(head -n 5 /dev/urandom | md5sum |cut -c 1-12)
-	echo "New password: $newpass"
+	#echo "New password: $newpass"
 	psql -Upostgres -c "ALTER USER hawk PASSWORD '$newpass'" template1
-	sed -i '/hawk/D' ~/.pgpass
-	echo "*:5432:hawk:hawk:$newpass" >> ~/.pgpass
-	chmod 600 ~/.pgpass
-	sed -i "/dbpass/s/=.*/=$newpass/" /home/sentry/hackman/hawk-web.conf
+	sed -i '/hawk/D' /root/.pgpass
+	echo "*:*:hawk:hawk:$newpass" >> /root/.pgpass
+	chmod 600 /root/.pgpass
+	sed -i "/dbpass/s/=.*/=$newpass/" $conf
+
     stop_program
     sleep 1
     start_program
 }
 
-# Install or reinstall the Hawk
-hawk_install() {
-	echo "Checking and removing old hawk files"
-	if [ -f /usr/local/sbin/hawk.pl ]; then
-		rm -f /usr/local/sbin/hawk.pl
-	fi
-	if [ -f /root/hawk-blocker.sh ]; then
-		rm -f /root/hawk-blocker.sh
-	fi
-	if [ -f /home/sentry/public_html/cgi-bin/hawk-web.pl ]; then
-		rm -f /home/sentry/public_html/cgi-bin/hawk-web.pl
-	fi
-	if [ -f /root/hawk_db.sql ]; then
-		rm -f /root/hawk_db.sql
-	fi
-	echo 'Downloading HAWK Daemon'
-	wget -c $hawkurl/hawk.source -O /usr/local/sbin/hawk.pl
-	echo 'Downloading hawk-blocker'
-	wget -c $hawkurl/hawk-blocker.source -O /root/hawk-blocker.sh
-	chmod 750 /root/hawk-blocker.sh /usr/local/sbin/hawk.pl
-	echo 'Downloading hawk web interface'
-	wget -c $hawkurl/hawk-web.source -O /home/sentry/public_html/cgi-bin/hawk-web.pl
-	chmod 755 /home/sentry/public_html/cgi-bin/hawk-web.pl
-	if [ ! -d /home/sentry/hackman ]; then
-		mkdir -p /home/sentry/hackman
-	fi
-	echo 'Downloading hawk web interface configuration file'
-	wget -c $hawkurl/hawk-web.conf -O /home/sentry/hackman/hawk-web.conf
-	chown sentry: /home/sentry/public_html/cgi-bin/hawk-web.pl /home/sentry/hackman/hawk-web.conf
-	echo 'Downloading hawk web interface html templates'
-	wget -c $hawkurl/templates.tgz -O /home/sentry/hackman/templates.tgz 
-	chown -R sentry: /home/sentry/hackman
-	echo 'Downloading hawk PgSQL database dump'
-	wget -c $hawkurl/hawk_db.sql -O /root/hawk_db.sql
-	echo "Installing hawk-web templates"
-	tar xfvz /home/sentry/hackman/templates.tgz -C /home/sentry/hackman
-	rm -f /home/sentry/hackman/templates.tgz
-	chown -R sentry: /home/sentry/hackman 
-	echo "Initializing Hawk DB..."
-	psql -Upostgres -c "CREATE USER hawk PASSWORD 'myHawkPass'" template1
-	psql -Upostgres -c 'CREATE DATABASE hawk OWNER hawk' template1
-	psql -Upostgres -f /root/hawk_db.sql hawk
-	change_hawk_pass
-	if ( ! grep 'HAWK-' /root/admin/sgfirewall > /dev/null ); then
-		echo -e "############ HAWK-BLOCKED ####################\n############ HAWK+BLOCKED ####################" >> /root/admin/sgfirewall
-		echo "Added HAWK lines to /root/admin/sgfirewall"
-	fi
-
-	if ( ! grep hawk /var/spool/cron/root > /dev/null ); then
-		chattr -ia /var/spool/cron/root
-		echo '17 * * * * /root/hawk-blocker.sh >> /root/hawk-blocker.log 2>&1' >> /var/spool/cron/root
-		chattr +ia /var/spool/cron/root
-	fi
-}
-
-create_table() {
-	if ( ! wget -c $hawkurl/hawk_db.sql-$1 -O /var/lib/pgsql/hawk_db.sql-$1 ); then
-		return 0
-	fi
-	psql -Upostgres -f /var/lib/pgsql/hawk_db.sql-$1 hawk
-	rm -f /var/lib/pgsql/hawk_db.sql-$1
-}
-
-# fix common problems with the DB
-check_db() {
-	list='broots failed_log blacklist'
-	for table in ${list}; do
-		if ( ! psql -q -t -Uhawk hawk -c '\d'|cut -d " " -f 4|grep -P "^$table$" > /dev/null); then
- 			echo "Missing table $table" 
-			create_table $table
-		fi
-	done
-	echo "DB tables: OK"
-}
-
-# fix missing files
-check_files() {
-	error=0
-	if [ ! -f /root/hawk-blocker.sh ]; then
-		let error++
-		wget -c $hawkurl/hawk-blocker.sh -O /root/hawk-blocker.sh	
-	fi
-	if [ ! -f /home/sentry/public_html/cgi-bin/hawk-web.pl ]; then
-		let error++
-		wget -c $hawkurl/hawk-web.pl -O ~sentry/public_html/cgi-bin/hawk-web.pl
-
-	fi
-	if [ ! -f /home/sentry/public_html/cgi-bin/hawk-web.pl ]; then
-		let error++
-		if [ ! -d /home/sentry/hackman ]; then
-			mkdir -p /home/sentry/hackman
-		fi
-		wget -c $hawkurl/hawk-web.conf -O /home/sentry/hackman/	
-	fi
-	if [ ! -f /usr/local/sbin/hawk.pl ]; then
-		let error++
-		wget -c $hawkurl/hawk.pl -O /usr/local/sbin/hawk.pl
-	fi
-	if [ "$error" == '4' ]; then
-		hawk_install
-	else
-		change_hawk_pass
-	fi
-}
 # Control structure
 case "$1" in
 	'start')
@@ -219,18 +156,6 @@ case "$1" in
 	'checkdb')
 		check_db
 	;;
-	'install')
-		if [ "$2" == "cgi" ]; then
-			hawk_install
-		else
-			echo -n "Are you sure you want a complete reinstall of Hawk(y/n): "
-			read a
-			if [ "$a" != 'y' ]; then
-				exit 0;
-			fi
-			hawk_install
-		fi
-	;;
 	'status')
 		echo -n 'Hawk status: '
 		check_status 0
@@ -239,5 +164,5 @@ case "$1" in
 		check_run
 	;;
 	*)
-	  echo -e "usage $0 OPTION\nBasic options:\t\tstart|stop|restart|status\nAdvanced options:\tdebug|reload|install|changepass|checkdb|check_run"
+	  echo -e "usage $0 OPTION\nBasic options:\t\tstart|stop|restart|status\nAdvanced options:\tdebug|reload|changepass"
 esac

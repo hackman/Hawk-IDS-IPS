@@ -3,19 +3,22 @@
 use strict;
 use warnings;
 
-use DBD::mysql;
+use DBD::Pg;
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
 
-require "/usr/local/sbin/parse_config.pm";
+use lib '/home/oneh/api/lib';
+use parse_config;
 
-import parse_config;
 $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';        # remove unsecure path
-my $VERSION = '5.0.0';
+my $VERSION = '5.1.0';
 
-my $debug = 0;
+# input/output should be unbuffered. pass it as soon as you get it
+our $| = 1;
+
+my $debug = 1;
 $debug = 1 if (defined($ARGV[0]));
 
 # This will be our function that will print all logger requests to /var/log/$logfile
@@ -39,11 +42,12 @@ sub get_ip {
 
 # Compare the current attacker's ip address with the local ips (primary and localhost)
 sub is_local_ip {
-	my $local_ip = shift;
+	#my $local_ip = shift;
+	my %whitelists = %{$_[0]};
 	my $current_ip = shift;
-	my %never_block = ("$local_ip" => 1, "127.0.0.1" => 1);
+
 	# Return 1 if the attacker ip is our own ip
-	return 1 if (defined($never_block{$current_ip}) && $never_block{$current_ip});
+	return 1 if (defined($whitelists{$current_ip}));
 	# Return 0 if the attacker ip is not local
 	return 0;
 }
@@ -96,22 +100,25 @@ sub sigChld {
 # Store the attacker's ip to the brootforce database if $_[0] 1
 # The brootforce table is later checked by the cron
 sub store_to_db {
-	# $_[0] 0 for insert into failed_log || 1 for insert into broots a.k.a 0 for log_me || 1 for broot_me
-	# $_[1] IP
-	# $_[2] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel
-	# $_[3] The user who is bruteforcing only if $_[0] == log_me
-	# $_[4] DB name
-	# $_[5] DB user
-	# $_[6] DB pass
-	my $conn = DBI->connect_cached($_[4], $_[5], $_[6], { PrintError => 1, AutoCommit => 1 }) or return 0;
+	# $_[0] DB name
+	# $_[1] DB user
+	# $_[2] DB pass
+	# $_[3] 0 insert into failed_log || 1 for insert into broots a.k.a 0 for log_me || 1 for broot_me || 2 inser into blacklist
+	# $_[4] IP
+	# $_[5] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel | failed attempts if $_[3] == 2
+	# $_[6] The user who is bruteforcing only if $_[3] == log_me
+	my $conn = DBI->connect_cached($_[0], $_[1], $_[2], { PrintError => 1, AutoCommit => 1 }) or return 0;
 
 	# Store each failed attempt to the failed_log table
-	if ($_[0] == 0) {
+	if ($_[3] == 0) {
 		my $log_me = $conn->prepare('INSERT INTO failed_log ( ip, service, "user" ) VALUES ( ?, ?, ? ) ') or return 0;
-		$log_me->execute($_[1], $_[2], $_[3]) or return 0;
-	} elsif ($_[0] == 1) {
+		$log_me->execute($_[4], $_[5], $_[6]) or return 0;
+	} elsif ($_[3] == 1) {
 		my $broot_me = $conn->prepare('INSERT INTO broots ( ip, service ) VALUES ( ?, ? ) ') or return 0;
-		$broot_me->execute($_[1], $_[2]) or return 0;
+		$broot_me->execute($_[4], $_[5]) or return 0;
+	} elsif ($_[3] == 2) {
+		my $log_block = $conn->prepare('INSERT INTO blacklist ( date_add, ip, count, reason ) VALUES (now(), ?, ?, ?)') or return 0;
+		$log_block->execute($_[4], $_[5], "Blocking IP $_[4] for having $_[5] $_[6] attempts") or return 0;
 	}
 
 	$conn->disconnect;
@@ -140,8 +147,22 @@ sub check_broots {
 	return 0;
 }
 
+sub do_block {
+	my $blocked_ip = shift;
+	my $block_list = shift;
+	if (system("/sbin/iptables -I in_hawk -s $blocked_ip -j DROP")) {
+		logger("/sbin/iptables -I in_hawk -s $blocked_ip -j DROP FAILED: $!");
+		return 0;
+	}
+	$block_list = $1 if ($block_list =~ /^(.*)$/);
+	open BLOCKLIST, '+>>', $block_list or "Failed to open $block_list for append: $!" and return 0;
+	print BLOCKLIST "iptables -I in_hawk -s $blocked_ip -j DROP\n" or "Failed to write to $block_list: $!" and return 0;
+	close BLOCKLIST;
+	return 1;
+}
+
 # Parse the pop3/imap logs
-sub pop_imap_broot {
+sub dovecot_broot {
 	my @current_line = split /\s+/, $_;
 	my $current_service = 3; # The default service id is 3 -> imap
 	$current_service = 2 if ($current_line[5] =~ /pop3-login:/); # Service is now 2 -> pop3
@@ -160,39 +181,61 @@ sub pop_imap_broot {
 	return ($ip, $attempts, $current_service, $user);
 }
 
+sub courier_broot {
+	#Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
+	#Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=kur, ip=[::ffff:87.118.135.130]
+	#Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+	#Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+	my @current_line = split /\s+/, $_;
+	my $current_service = 3; # The default service id is 3 -> imap
+	$current_service = 2 if ($current_line[4] =~ /pop3d(-ssl)?:/); # Service is now 2 -> pop3
+	my $user = $_;
+	my $ip = $_;
+	my $attempts = 1;
+
+	$user =~ s/user=(.*),/$1/;
+	$ip =~ s/ip=\[(.*)\]/$1/;
+	$ip =~ s/.*://;
+	chomp ($user, $ip);
+
+    # return ip, number of failed attempts, service under attack, failed username
+    # this is later stored to the failed_log table via store_to_db
+	return ($ip, $attempts, $current_service, $user);
+}
+
 sub ssh_broot {
 	my $ip = '';
 	my $user = '';
 	my @sshd = split /\s+/, $_;
 
-	if ( $sshd[8] =~ /invalid/ ) {
+	if ($sshd[8] =~ /invalid/ ) {
 		#May 16 03:27:24 serv01 sshd[25536]: Failed password for invalid user suport from ::ffff:85.14.6.2 port 52807 ssh2
 		#May 19 22:54:19 serv01 sshd[21552]: Failed none for invalid user supprot from 194.204.32.101 port 20943 ssh2
 		$sshd[12] =~ s/::ffff://;
 		$ip = $sshd[12];
 		$user = $sshd[10];
 		logger("sshd: Incorrect V1 $user $ip") if ($debug);
-	} elsif ( $sshd[5] =~ /Invalid/) {
+	} elsif ($sshd[5] =~ /Invalid/) {
 		#May 19 22:54:19 serv01 sshd[21552]: Invalid user supprot from 194.204.32.101
 		$sshd[9] =~ s/::ffff://;
 		$ip = $sshd[9];
 		$user = $sshd[7];
 		logger("sshd: Incorrect V2 $user $ip") if ($debug);
-	} elsif ( $sshd[5] =~ /pam_unix\(sshd:auth\)/ ) {
+	} elsif ($sshd[5] =~ /pam_unix\(sshd:auth\)/ ) {
 		#May 15 09:39:10 serv01 sshd[9474]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=194.204.32.101  user=root
 		$sshd[13] =~ s/::ffff://;
 		$sshd[13] =~ s/rhost=//;
 		$ip = $sshd[13];
 		$user = $sshd[14];
 		logger("sshd: Incorrect PAM $user $ip") if ($debug);
-	} elsif ( $sshd[5] =~ /Bad/ ) {
+	} elsif ($sshd[5] =~ /Bad/ ) {
 		#May 15 09:33:45 serv01 sshd[29645]: Bad protocol version identification '0penssh-portable-com' from 194.204.32.101
 		my @sshd = split /\s+/, $_;
 		$sshd[11] =~ s/::ffff://;
 		$ip = $sshd[11];
 		$user = 'none';
 		logger("sshd: Grabber $user $ip") if ($debug);
-	} elsif ( $sshd[5] eq 'Failed' && $sshd[6] eq 'password' ) {
+	} elsif ($sshd[5] eq 'Failed' && $sshd[6] eq 'password' ) {
 		#May 15 09:39:12 serv01 sshd[9474]: Failed password for root from 194.204.32.101 port 17326 ssh2
 		#May 15 11:36:27 serv01 sshd[5448]: Failed password for support from ::ffff:67.15.243.7 port 47597 ssh2
 		return undef if (! defined($sshd[10]));
@@ -214,7 +257,7 @@ sub ssh_broot {
 	return ($ip, 1, 1, $user);
 }
 
-sub ftp_broot {
+sub pureftpd_broot {
 	# May 16 03:06:43 serv01 pure-ftpd: (?@85.14.6.2) [WARNING] Authentication failed for user [mamam]
 	# Mar  7 01:03:49 serv01 pure-ftpd: (?@68.4.142.211) [WARNING] Authentication failed for user [streetr1] 
 	my @ftp = split /\s+/, $_;	
@@ -225,6 +268,14 @@ sub ftp_broot {
 	# this is later stored to the failed_log table via store_to_db
 	# service id 0 -> ftp
 	return ($ftp[5], 1, 0, $ftp[11]);
+}
+
+sub proftpd_broot {
+	#Aug 27 06:43:28 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER user: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
+	#Aug 27 06:43:47 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER werethet: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
+	#Aug 27 06:45:54 tester proftpd[7449]: tester (::ffff:127.0.0.1[::ffff:127.0.0.1]) - USER jivko (Login failed): Incorrect password. 
+	#Aug 27 06:46:31 tester proftpd[8655]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER jivko (Login failed): Incorrect password. 
+	# TODO
 }
 
 sub cpanel_webmail_broot {
@@ -245,14 +296,17 @@ sub cpanel_webmail_broot {
 # This is the main function which calls all other functions
 # The entire logic is stored here
 sub main {
-	my $conf = '/home/sentry/hackman/hawk-web.conf';
+	my $conf = '/home/oneh/api/etc/hawk.conf';
 	my %config = parse_config($conf);
 
 	# Hawk files
 	my $logfile = $config{'logfile'};	# daemon logfile
+	die "No logfile defined in the conf" if (! defined($logfile) || $logfile eq '');
+
 	$logfile = $1 if ($logfile =~ /^(.*)$/);
 	# open the hawk log so we can immediately start logging any errors or debugging prints
 	open HAWKLOG, '>>', $logfile or die "DIE: Unable to open logfile $logfile: $!\n";
+	logger("Hawk version $VERSION started!");
 	
 	my $pidfile = $config{'pidfile'};	# daemon pidfile
 	$pidfile  = $1 if ($pidfile =~ /^(.*)$/);
@@ -283,9 +337,6 @@ sub main {
 	# What the name of the pid will be in ps auxwf :)
 	$0 = $config{'daemon_name'};
 	
-	# input/output should be unbuffered. pass it as soon as you get it
-	our $| = 1;
-	
 	# make sure that hawk is not running before trying to create a new pid
 	# THIS SHOULD BE FIXED!!!
 	if (is_hawk_running($pidfile)) {
@@ -295,7 +346,10 @@ sub main {
 	
 	# Get the local primary ip of the server so we do not block it later
 	# This open a security loop hole in case of local bruteforce attempts
-	my $local_ip = get_ip();
+	# my $local_ip = get_ip();
+	my $whitelislt = $config{'block_whitelist'};
+	my %whitelists = map { $_ => '1' } split /,/, $whitelislt;
+	my $set_limit = $config{'set_limit'};
 
 	# me are daemon now :)
 	defined(my $pid=fork) or die "DIE: Cannot fork process: $! \n";
@@ -322,6 +376,9 @@ sub main {
 	# make the output of the opened logs unbuffered
 	select((select(HAWKLOG), $| = 1)[0]);
 	select((select(LOGS), $| = 1)[0]);
+	select((select(STDIN), $| = 1)[0]);
+	select((select(STDOUT), $| = 1)[0]);
+	select((select(STDERR), $| = 1)[0]);
 	
 	# this should never ends.
 	# this is the main infinity loop
@@ -336,23 +393,57 @@ sub main {
 		# $block_results[3] - the username that failed to authenticate to the given service
 		my @block_results = undef;
 
-		if ($_ =~ /pop3-login:|imap-login:/ && $_ =~ /auth failed/) { # This looks like a pop3/imap attack.
-			logger ("calling pop_imap_broot") if ($debug);
-			@block_results = pop_imap_broot($_); # Pass the log line to the pop_imap_broot parser and get the attacker's details
-		} elsif ( $_ =~ /sshd\[[0-9].+\]:/) {
-			next if ($_ !~ /Failed \w \w/ && $_ !~ /authentication failure/ && $_ !~ /Invalid user/i && $_ !~ /Bad protocol/); # This looks like sshd attack
-			logger ("calling ssh_broot") if ($debug);
-			@block_results = ssh_broot($_); # Pass it to the ssh_broot parser and get the attacker's results
-		} elsif ($_ =~ /pure-ftpd:/ && $_ =~ /Authentication failed/) {
-			logger ("calling ftp_broot") if ($debug);
-			@block_results = ftp_broot($_);
-		} elsif ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) { # This looks like cPanel/Webmail attack
-			logger ("calling cpanel_webmail_broot") if ($debug);
-			@block_results = cpanel_webmail_broot($_); # Pass it to the cpanel_webmail_broot parser and get the attacker's results
-	   	} else {
-			next; # This does not look like a particular known attack so skip this line and go to the next log line
-			# Please mind that we do not have to check for block results etc. if this is not an attack line
+		if ($config{'watch_ssh'}) {
+			if ( $_ =~ /sshd\[[0-9].+\]:/) {
+				next if ($_ !~ /Failed \w \w/ && $_ !~ /authentication failure/ && $_ !~ /Invalid user/i && $_ !~ /Bad protocol/); # This looks like sshd attack
+				logger ("calling ssh_broot") if ($debug);
+				@block_results = ssh_broot($_); # Pass it to the ssh_broot parser and get the attacker's results
+			}
 		}
+
+		if ($config{'watch_cpanel'}) {
+			if ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) { # This looks like cPanel/Webmail attack
+				logger ("calling cpanel_webmail_broot") if ($debug);
+				@block_results = cpanel_webmail_broot($_); # Pass it to the cpanel_webmail_broot parser and get the attacker's results
+			}
+		}
+
+		if ($config{'watch_pureftpd'}) {
+			if ($_ =~ /pure-ftpd:/ && $_ =~ /Authentication failed/) {
+				logger ("calling pureftpd_broot") if ($debug);
+				@block_results = pureftpd_broot($_);
+			}
+		}
+		if ($config{'watch_proftpd'}) {
+			#Aug 27 06:43:28 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER user: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
+			#Aug 27 06:43:47 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER werethet: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
+			#Aug 27 06:45:54 tester proftpd[7449]: tester (::ffff:127.0.0.1[::ffff:127.0.0.1]) - USER jivko (Login failed): Incorrect password. 
+			#Aug 27 06:46:31 tester proftpd[8655]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER jivko (Login failed): Incorrect password. 
+			if ($_ =~ /proftpd\[[0-9]+\]:/ && $_ =~ /no such user|Incorrect password/) {
+				logger ("calling proftpd_broot") if ($debug);
+				@block_results = proftpd_broot($_);
+			}
+		}
+
+		if ($config{'watch_dovecot'}) {
+			if ($_ =~ /pop3-login:|imap-login:/ && $_ =~ /auth failed/) { # This looks like a pop3/imap attack.
+				logger ("calling dovecot_broot") if ($debug);
+				@block_results = dovecot_broot($_); # Pass the log line to the pop_imap_broot parser and get the attacker's details
+			}
+		}
+		if ($config{'watch_courier'}) {
+			#Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
+			#Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=kur, ip=[::ffff:87.118.135.130]
+			#Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+			#Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+			if ($_ =~ /pop3d(-ssl)?:|imapd(-ssl?):/ && $_ =~ /FAILED/) {
+				logger ("calling courier_broot") if ($debug);
+				@block_results = courier_broot($_);
+			}
+	   	}
+
+		next if (! @block_results);
+		next if (! is_local_ip(\%whitelists, $block_results[0]));
 	
 		# $hack_attempts{KEY} -> attacker's ip address
 		# $hack_attempts{ip}[0] -> total number of failed login attempts so far from that ip for ALL services
@@ -366,32 +457,52 @@ sub main {
 		# $block_results[2] - each service parser return it's own unique service id which is the id of the service which is under attack
 		# $block_results[3] - the username that failed to authenticate to the given service
 		# If the service log parser returned valid attacker response instead of undef we store the attack attempt to the database
-		if (@block_results > 1 && ! is_local_ip($local_ip, $block_results[0])) {
-			# Update the total failed attempts for the particular ip. If this ip is unknown to us we init $hack_attempts hash key for it
-			# The total failed attempts calculations are made by get_attempts() function
-			$hack_attempts{$block_results[0]}[0] = get_attempts($block_results[1], $hack_attempts{$block_results[0]}[0]);
-			# Store the service id of the last failed attempt for that ip
-			$hack_attempts{$block_results[0]}[1] = $block_results[2];
-			logger("got attacker. storing it to failed_log: 0, $block_results[0], $block_results[1], $block_results[1]");
-			# Finally write down the failed attempt to the database
-			# store_to_db arguments: 0 - store to failed_log, attacker ip, current number of failed attempts, failed username, .... db details
-			if (! store_to_db(0, $block_results[0], $block_results[1], $block_results[1], $config{"db"}, $config{"dbuser"}, $config{"dbpass"})) {
-				logger("store_to_db failed: 0, $block_results[0], $block_results[1], $block_results[1]!");
-			}
+		#if (@block_results > 1 && ! is_local_ip($local_ip, $block_results[0])) {
+
+		# Update the total failed attempts for the particular ip. If this ip is unknown to us we init $hack_attempts hash key for it
+		# The total failed attempts calculations are made by get_attempts() function
+		$hack_attempts{$block_results[0]}[0] = get_attempts($block_results[1], $hack_attempts{$block_results[0]}[0]);
+		# Store the service id of the last failed attempt for that ip
+		$hack_attempts{$block_results[0]}[1] = $block_results[2];
+		logger("got attacker. storing it to failed_log: 0, $block_results[0], $block_results[1], $block_results[1]");
+		# Finally write down the failed attempt to the database
+		# store_to_db arguments: 0 - store to failed_log, attacker ip, current number of failed attempts, failed username, .... db details
+		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $block_results[0], $block_results[1], $block_results[1])) {
+			logger("store_to_db failed: 0, $block_results[0], $block_results[1], $block_results[1]!");
 		}
 
 		# Check for broots as we just had one new failed attempt above
 		while (my $ip = each (%hack_attempts)) {
 			# Skip this ip if it is already added to the database
-			logger("$ip is already added to the broots db") and next if (defined($hack_attempts{$ip}[3] && $hack_attempts{$ip}[3]));
+			#logger("$ip is already added to the broots db") and next if (defined($hack_attempts{$ip}[3] && $hack_attempts{$ip}[3]));
 			# Skip this ip if it's number of failed attempts are less than the required from the conf
-			logger("$ip has $hack_attempts{$ip}[0] attempts. required $config{'max_attempts'} for block ") and next if (! check_broots($hack_attempts{$ip}[0], $config{"max_attempts"}));
-			logger("store_to_db(broots): 1, $ip, $hack_attempts{$ip}[1], undef");
+			if ($set_limit) {
+				logger("Block on failed. $ip has $hack_attempts{$ip}[0] attempts. required $config{'block_count'} for block ") and next if (! check_broots($hack_attempts{$ip}[0], $config{"block_count"}));
+			} else {
+				logger("Block on brute. $ip has $hack_attempts{$ip}[0] attempts. required $config{'max_attempts'} for block ") and next if (! check_broots($hack_attempts{$ip}[0], $config{"max_attempts"}));
+			}
+			logger("store_to_db(broots): 1, $ip, $hack_attempts{$ip}[1]");
 			# The current attacker got >= config{"max_attempts"} in less than $broot_time seconds
 			# It will be handed over to the hawk.broots table for storage and later blocked by the hawk cron
-			$hack_attempts{$ip}[3] = store_to_db(1, $ip, $hack_attempts{$ip}[1], undef, $config{"db"}, $config{"dbuser"}, $config{"dbpass"});
+			$hack_attempts{$ip}[3] += store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $ip, $hack_attempts{$ip}[1]);
 			# The return results from store_to_db are later passed to $hack_attempts{$ip}[3]
-			# This means that we will not try to store the same ip again before the $hack_attempts hashes are cleaned
+			if ($set_limit) {
+				if (! do_block($ip, $config{'block_list'})) {
+					logger("Failed to block $ip and store it to $config{'block_list'}") if ($debug);
+				} else {
+					logger("Successfully blocked $ip and stored to $config{'block_list'}") if ($debug);
+					store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $ip, $hack_attempts{$ip}[0], "failed");
+				}
+			} else {
+				if ($hack_attempts{$ip}[3] >= $config{'max_attempts'}) {
+					if (! do_block($ip, $config{'block_list'})) {
+						logger("Failed to block $ip and store it to $config{'block_list'}") if ($debug);
+					} else {
+						logger("Successfully blocked $ip and stored to $config{'block_list'}") if ($debug);
+						store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $ip, $hack_attempts{$ip}[3], "bruteforce");
+					}
+				}
+			}
 		}
 	
 		my $curr_time = time();
