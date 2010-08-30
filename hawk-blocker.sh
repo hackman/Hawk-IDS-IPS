@@ -14,7 +14,7 @@ for i in `echo $ips`; do
 	echo "Removing $ip($id) from DB and firewall"
 	psql hawk -c "UPDATE blacklist set date_rem=now() WHERE id = '$id'"
 	sed -i "/in_hawk.*$ip/D" $block_list
-	iptables -D in_hawk -j DROP -s $ip
+	iptables -D in_hawk -s $ip -j DROP
 done
 export PGUSER="letmein"
 export PGPASSWD="letmein"

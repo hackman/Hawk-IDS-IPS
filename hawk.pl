@@ -13,7 +13,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';        # remove unsecure path
-my $VERSION = '5.1.0';
+my $VERSION = '5.1.2';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -42,13 +42,11 @@ sub get_ip {
 
 # Compare the current attacker's ip address with the local ips (primary and localhost)
 sub is_local_ip {
-	#my $local_ip = shift;
 	my %whitelists = %{$_[0]};
-	my $current_ip = shift;
+	my $current_ip = $_[1];
 
 	# Return 1 if the attacker ip is our own ip
 	return 1 if (defined($whitelists{$current_ip}));
-	# Return 0 if the attacker ip is not local
 	return 0;
 }
 
@@ -163,19 +161,32 @@ sub do_block {
 
 # Parse the pop3/imap logs
 sub dovecot_broot {
-	my @current_line = split /\s+/, $_;
+	# Dovecot POP3
+	#Aug 30 03:01:57 tester dovecot: pop3-login: method=PLAIN, rip=87.118.135.130, lip=209.62.32.14 Disconnected (auth failed, 2 attempts)
+	#Aug 30 03:11:00 tester dovecot: pop3-login: method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected Disconnected (auth failed, 3 attempts)
+	#Aug 30 03:12:51 tester dovecot: pop3-login: user=<testuser>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14 Aborted login (auth failed, 1 attempts)
+	#Aug 30 03:19:42 tester dovecot: pop3-login: Disconnected (auth failed, 1 attempts): user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14
+	#Aug 30 03:20:06 tester dovecot: pop3-login: Disconnected (auth failed, 1 attempts): user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected
+	#Aug 30 03:15:03 tester dovecot: pop3-login: user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14 Disconnected (auth failed, 1 attempts)
+	#Aug 30 03:15:21 tester dovecot: pop3-login: user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected Disconnected (auth failed, 1 attempts)
+	# Dovecot IMAP
+	#Aug 30 03:11:59 tester dovecot: imap-login: method=PLAIN, rip=87.118.135.130, lip=209.62.32.14 Disconnected (auth failed, 3 attempts)
+	#Aug 30 03:11:36 tester dovecot: imap-login: method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected Disconnected (auth failed, 2 attempts)
+	#Aug 30 03:13:21 tester dovecot: imap-login: user=<testuser>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14 Aborted login (auth failed, 1 attempts)
+	#Aug 30 03:15:37 tester dovecot: imap-login: user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected Disconnected (auth failed, 1 attempts)
+	#Aug 30 03:20:26 tester dovecot: imap-login: Disconnected (auth failed, 1 attempts): user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14
+	#Aug 30 03:20:40 tester dovecot: imap-login: Disconnected (auth failed, 1 attempts): user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected
+
 	my $current_service = 3; # The default service id is 3 -> imap
-	$current_service = 2 if ($current_line[5] =~ /pop3-login:/); # Service is now 2 -> pop3
-	my $user = $_;
-	my $ip = $_;
-	my $attempts = $_;
+	$current_service = 2 if ($_ =~ /pop3-login:/); # Service is now 2 -> pop3
 
 	# Extract the user, ip and number of failed attempts from the log
-	$user =~ s/^.* user=<(.+)>,.*$/$1/;
-	$ip =~ s/^.* rip=([0-9.]+),.*$/$1/;
-	$attempts =~ s/^.* ([0-9]+) attempts\).*$/$1/;
+	my $user = 'multiple';
+	$user = $1 if ($_ =~ /^.* user=<(.+)>,.*$/);
+	my $ip = $1 if ($_ =~ /^.* rip=([0-9.]+),.*$/);
+	my $attempts = $1 if ($_ =~ /^.* ([0-9]+) attempts\).*$/);
 	chomp ($user, $ip, $attempts);
-
+	logger("Returning User: $user IP: $ip Attempts $attempts");
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
 	return ($ip, $attempts, $current_service, $user);
@@ -276,6 +287,11 @@ sub proftpd_broot {
 	#Aug 27 06:45:54 tester proftpd[7449]: tester (::ffff:127.0.0.1[::ffff:127.0.0.1]) - USER jivko (Login failed): Incorrect password. 
 	#Aug 27 06:46:31 tester proftpd[8655]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER jivko (Login failed): Incorrect password. 
 	# TODO
+	my $user = $1 if ($_ =~ / - USER (\w+)/);
+	my $ip = $1 if ($_ =~ /\(.*\[(.*)\]\)/);
+	$ip =~ s/.*://g;
+	logger("Returning: $ip, 1, 0, $user");
+	return ($ip, 1, 0, $user);
 }
 
 sub cpanel_webmail_broot {
@@ -442,15 +458,15 @@ sub main {
 			}
 	   	}
 
-		next if (! @block_results);
-		next if (! is_local_ip(\%whitelists, $block_results[0]));
+		next if (@block_results < 2);
+		next if (is_local_ip(\%whitelists, $block_results[0]));
 	
 		# $hack_attempts{KEY} -> attacker's ip address
 		# $hack_attempts{ip}[0] -> total number of failed login attempts so far from that ip for ALL services
 		# $hack_attempts{ip}[1] -> service code of the last service where that ip failed to login/authenticate
 		# $hack_attempts{ip}[2] -> the last user which failed to authenticate from that ip
-		# $hack_attempts{ip}[3] -> is this ip address already stored to the broots table thus blocked. this is used so we can avoid adding duplicate entries for single ip
-		#				 		   also this will avoid adding multiple iptables rules for a single ip
+		# $hack_attempts{ip}[3] -> is this ip address already stored to the broots table
+		# $hack_attempts{ip}[4] -> Is this IP blocked. this is used so we can avoid blocking duplicate entries for single ip.
 
 		# $block_results[0] - attacker's ip address
 		# $block_results[1] - number of failed attempts. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$ip}[0]
@@ -465,10 +481,11 @@ sub main {
 		# Store the service id of the last failed attempt for that ip
 		$hack_attempts{$block_results[0]}[1] = $block_results[2];
 		logger("got attacker. storing it to failed_log: 0, $block_results[0], $block_results[1], $block_results[1]");
+
 		# Finally write down the failed attempt to the database
-		# store_to_db arguments: 0 - store to failed_log, attacker ip, current number of failed attempts, failed username, .... db details
-		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $block_results[0], $block_results[1], $block_results[1])) {
-			logger("store_to_db failed: 0, $block_results[0], $block_results[1], $block_results[1]!");
+		# store_to_db arguments: 0 - store to failed_log, attacker ip, service ID, failed username, .... db details
+		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $block_results[0], $block_results[2], $block_results[3])) {
+			logger("store_to_db failed: 0, $block_results[0], $block_results[2], $block_results[3]!");
 		}
 
 		# Check for broots as we just had one new failed attempt above
@@ -486,6 +503,9 @@ sub main {
 			# It will be handed over to the hawk.broots table for storage and later blocked by the hawk cron
 			$hack_attempts{$ip}[3] += store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $ip, $hack_attempts{$ip}[1]);
 			# The return results from store_to_db are later passed to $hack_attempts{$ip}[3]
+
+			next if (defined($hack_attempts{$ip}[4]) && $hack_attempts{$ip}[4]); # This IP is already blocked.
+
 			if ($set_limit) {
 				if (! do_block($ip, $config{'block_list'})) {
 					logger("Failed to block $ip and store it to $config{'block_list'}") if ($debug);

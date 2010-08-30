@@ -67,6 +67,9 @@ start_program() {
 		fi
 		echo "[ CREATED ]"
 	else
+		if ( ! iptables -t filter -F in_hawk ); then
+			echo "Failed to flush the old rules from in_hawk"
+		fi
 		echo "[ YES ]"
 	fi
 	block_list=$(awk -F = '/block_list/{print $2}' $conf)
