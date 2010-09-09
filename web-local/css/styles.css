@@ -26,3 +26,14 @@
 .x-toolbar .x-btn-bc{
     background-position: 0 -18px;
 }
+
+/* Make the cells in grids selectable  */
+.x-grid3-row td,
+.x-grid3-summary-row td,
+.x-grid3-cell-text,
+.x-grid3-hd-text,
+.x-grid3-hd,
+.x-grid3-row {
+	-moz-user-select:inherit;
+	-khtml-user-select:text;
+}

@@ -345,8 +345,8 @@ function Show_Services(type) {
 					var services_grid = new Ext.grid.GridPanel({
 						store: services_store,
 						columns: [
-							{header: 'Date', width: 195},
-							{header: 'IP address', width: 195}
+							{header: 'Date', width: 195, sortable: true, dataIndex: 'date'},
+							{header: 'IP address', width: 195, sortable: true, dataIndex: 'ip'}
 						],
 						width: 750,
 						height: 480,
@@ -369,6 +369,7 @@ function Show_Services(type) {
 			}
 		}
 	});
+	services_store.setDefaultSort('date', 'desc');
 }
 
 function Show_IP_Details(ipaddr, interval) {
@@ -599,7 +600,7 @@ Ext.onReady(function(){
 			'margin-right': 'auto',
 		},
 		items: [{
-				title: '<a href="http://hawk.sgadmins.com">Back to master interface</a>',
+				title: '<a href="http://portal.sgadmins.com/index.html?action=3">Back to master interface</a>',
 				items: charts,
 		}],
 		bbar:{
@@ -717,6 +718,7 @@ Ext.onReady(function(){
 		summary_store.setDefaultSort('count', 'desc');
 	
 		summary_grid.push(new Ext.grid.GridPanel({
+				disableSelection: false,
 				store: summary_store,
 				columns: [
 					{header: 'IP address', sortable: true, width: 135, dataIndex: 'ip'},
@@ -735,15 +737,15 @@ Ext.onReady(function(){
 		);
 	}
 
-	summary_grid[0].on('rowclick', function(grid, rowIndex, e) {
+	summary_grid[0].on('rowdblclick', function(grid, rowIndex, e) {
 		record = grid.getStore().getAt(rowIndex).json;
 		Show_IP_Details(record[1], summaryObj.options[0].interval);
 	});
-	summary_grid[1].on('rowclick', function(grid, rowIndex, e) {
+	summary_grid[1].on('rowdblclick', function(grid, rowIndex, e) {
 		record = grid.getStore().getAt(rowIndex).json;
 		Show_IP_Details(record[1], summaryObj.options[1].interval);
 	});
-	summary_grid[2].on('rowclick', function(grid, rowIndex, e) {
+	summary_grid[2].on('rowdblclick', function(grid, rowIndex, e) {
 		record = grid.getStore().getAt(rowIndex).json;
 		Show_IP_Details(record[1], summaryObj.options[2].interval);
 	});
