@@ -16,10 +16,12 @@ use JSON::XS;
 use CGI qw/:standard/;
 use POSIX qw(strftime);
 
-use lib '/home/oneh/api/lib';
+use lib '/home/sentry/hackman/cpustats/modules/';
+#use lib '/home/oneh/api/lib';
 use parse_config;
 
-my $conf = '/home/oneh/api/etc/hawk.conf';
+my $conf = '/home/sentry/hackman/cpustats/hawk.conf';
+#my $conf = '/home/oneh/api/etc/hawk.conf';
 my %config = parse_config($conf);
 my $VERSION = '0.1.0';
 
