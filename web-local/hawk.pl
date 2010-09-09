@@ -11,26 +11,27 @@
 
 use strict;
 use warnings;
-use DBI; 
+use DBD::Pg;
 use JSON::XS;
 use CGI qw/:standard/;
 use POSIX qw(strftime);
 
-require "/home/sentry/hackman/cpustats/modules/parse_config.pm";
+use lib '/home/oneh/api/lib';
+use parse_config;
 
-import parse_config;
-
-my $conf = '/home/sentry/hackman/hawk-web.conf';
+my $conf = '/home/oneh/api/etc/hawk.conf';
 my %config = parse_config($conf);
-my $version = 0.1;
-my %srvhash = (
-	"0" => "ftp",
-	"1" => "ssh",
-	"2" => "pop3",
-	"3" => "imap",
-	"4" => "webmail",
-	"5" => "cPanel"
-);
+my $VERSION = '0.1.0';
+
+my %srvhash = split(/[: ]/, $config{'service_names'});
+#my %srvhash = (
+#	"0" => "ftp",
+#	"1" => "ssh",
+#	"2" => "pop3",
+#	"3" => "imap",
+#	"4" => "webmail",
+#	"5" => "cPanel"
+#);
 
 sub web_error {
 	print "Content-type: text/plain\r\n\r\n";
@@ -48,7 +49,7 @@ my $charts_24h_query = "
 ";
 
 my $brutes_24h = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH24:MI:SS\'), ip, service
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service
 	FROM broots
 	WHERE date > now() - interval \'24 hours\'
 	OFFSET ?
@@ -62,7 +63,7 @@ my $brutes_24h_count = "
 ";
 
 my $failed_24h = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH24:MI:SS\'), ip, service, "user"
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service, "user"
 	FROM failed_log
 	WHERE date > now() - interval \'24 hours\'
 	OFFSET ?
@@ -83,7 +84,7 @@ my $brutes_count = $conn->prepare('
 ');
 
 my $select_brutes = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH24:MI:SS\'), ip
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip
 	FROM broots
 	WHERE date > now() - interval \'24 hour\'
 	AND service = ?
@@ -104,13 +105,13 @@ my $failed_summary_query = "
 ";
 
 my $select_blocked_ip = $conn->prepare('
-	SELECT TO_CHAR(date_add, \'YYYY-MM-DD HH24:MI:SS\'), TO_CHAR(date_rem, \'YYYY-MM-DD HH24:MI:SS\'), ip, reason
+	SELECT TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'), TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'), ip, reason
 	FROM blacklist
 	WHERE ip=?
 ');
 
 my $failed_ip_query = "
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH24:MI:SS\'), ip, \"user\", service
+	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, \"user\", service
 	FROM failed_log
 	WHERE date > now() - interval '%s'
 	AND ip=?
@@ -127,8 +128,8 @@ my $failed_ip_query_count = "
 
 my $select_blocked = $conn->prepare('
 	SELECT
-		TO_CHAR(date_add, \'YYYY-MM-DD HH24:MI:SS\'),
-		TO_CHAR(date_rem, \'YYYY-MM-DD HH24:MI:SS\'),
+		TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'),
+		TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'),
 		ip,
 		reason
 	FROM
@@ -151,7 +152,7 @@ if (defined(param('id'))) {
 	my $id = param('id');
 	if ($id == 1) {
 		if (defined(param('service'))) {
-			my $service = $srvhash{param('service')};
+			my $service = param('service');
 			$select_brutes->execute($service) or web_error("Unable to get bruteforces per service from database: $DBI::errstr");
 			my @brutes = ();
 			my $count = 0;
@@ -170,8 +171,14 @@ if (defined(param('id'))) {
 			# FTP(0) SSH(1) POP3(2) IMAP(3) WebMail(4) cPanel(5)
 			my @srvs = ("ftp", "ssh", "pop3", "imap", "webmail", "cpanel");
 			for (my $i=0; $i<=$#srvs; $i++) {
-				if (!defined($brutes{$srvs[$i]})) {
-					$brutes{$srvs[$i]} = 0
+				#if (!defined($brutes{$srvs[$i]})) {
+				#	$brutes{$srvs[$i]} = 0
+				#}
+				if (defined($brutes{$i})) {
+					$brutes{$srvs[$i]} = $brutes{$i};
+					delete $brutes{$i};
+				} else {
+					$brutes{$srvs[$i]} = 0;
 				}
 			}
 			my $json = JSON::XS->new->ascii->pretty->allow_nonref;
@@ -216,13 +223,12 @@ if (defined(param('id'))) {
 					push(@charts, [0, $new]);
 				}
 			}
-			my @reversed = reverse(@charts); 
 			my $json = JSON::XS->new->ascii->pretty->allow_nonref;
-			print $json->encode(\@reversed);
+			print $json->encode(\@charts);
 		}
 	} elsif ($id == 4) {
-		my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
-		my $offset = (param('start') =~ /^([0-9]+)$/) ? $1 : 0;
+		my $limit = (defined(param('limit')) && param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
+		my $offset = (defined(param('start')) && param('start') =~ /^([0-9]+)$/) ? $1 : 0;
 		my %result;
 		$result{'total'} = $conn->selectrow_array($brutes_24h_count);
 		$brutes_24h->execute($offset, $limit) or web_error("Unable to get brutes 24h from database: $DBI::errstr");
@@ -232,8 +238,8 @@ if (defined(param('id'))) {
 		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
 		print $json->encode(\%result);
 	} elsif ($id == 5) {
-		my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
-		my $offset = (param('start') =~ /^([0-9]+)$/) ? $1 : 0;
+		my $limit = (defined(param('limit')) && param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
+		my $offset = (defined(param('start')) && param('start') =~ /^([0-9]+)$/) ? $1 : 0;
 		my %result;
 		$result{'total'} = $conn->selectrow_array($failed_24h_count);
 		$failed_24h->execute($offset, $limit) or web_error("Unable to get failed 24h from database: $DBI::errstr");
@@ -257,17 +263,17 @@ if (defined(param('id'))) {
 			print $json->encode(\@result);
 		}
 	} elsif ($id == 7) {
-		my $charts_24h = $conn->prepare(sprintf($charts_24h_query, "broots"));
-		$charts_24h->execute() or web_error("Unable to get chart info from database: $DBI::errstr");
+		my $charts_24h_broots = $conn->prepare(sprintf($charts_24h_query, "broots"));
+		$charts_24h_broots->execute() or web_error("Unable to get chart info from database: $DBI::errstr");
 		my @charts = ();
 		my %brutes;
-		while (my @data = $charts_24h->fetchrow_array) {
+		while (my @data = $charts_24h_broots->fetchrow_array) {
 			$brutes{$data[1]} = $data[0];
 		}
-		my $charts_24h = $conn->prepare(sprintf($charts_24h_query, "failed_log"));
-		$charts_24h->execute() or web_error("Unable to get chart info from database: $DBI::errstr");
+		my $charts_24h_failed = $conn->prepare(sprintf($charts_24h_query, "failed_log"));
+		$charts_24h_failed->execute() or web_error("Unable to get chart info from database: $DBI::errstr");
 		my %failed;
-		while (my @data = $charts_24h->fetchrow_array) {
+		while (my @data = $charts_24h_failed->fetchrow_array) {
 			$failed{$data[1]} = $data[0];
 		}
 		my $hour = strftime('%H', localtime(time));
@@ -287,8 +293,8 @@ if (defined(param('id'))) {
 		if (defined(param('interval')) && defined(param('ip'))) {
 			my $interval = param('interval');
 			my $ip = param('ip');
-			my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
-			my $offset = (param('start') =~ /^([0-9]+)$/) ? $1 : 0;
+			my $limit = (defined(param('limit')) && param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
+			my $offset = (defined(param('start')) && param('start') =~ /^([0-9]+)$/) ? $1 : 0;
 			my %result;
 			$result{'total'} = $conn->selectrow_array(sprintf($failed_ip_query_count, $interval), undef, $ip);
 			my $failed_ip = $conn->prepare(sprintf($failed_ip_query, $interval));
@@ -301,8 +307,8 @@ if (defined(param('id'))) {
 			print $json->encode(\%result);
 		}
 	} elsif ($id == 9) {
-		my $limit = (param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
-		my $offset = (param('start') =~ /^([0-9]+)$/) ? $1 : 0;
+		my $limit = (defined(param('limit')) && param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
+		my $offset = (defined(param('start')) && param('start') =~ /^([0-9]+)$/) ? $1 : 0;
 		my %result;
 		$result{'total'} = $conn->selectrow_array($get_blocked_count);
 		$select_blocked->execute($offset, $limit) or web_error("Could not get blocked ips: $DBI::errstr\n");
