@@ -371,7 +371,7 @@ sub main {
 	defined(my $pid=fork) or die "DIE: Cannot fork process: $! \n";
 	exit if $pid;
 	setsid or die "DIE: Unable to setsid: $!\n";
-	umask 0;
+	#umask 0;
 
 	# close stdin and stdout
 	# redirect stderr to the hawk log
