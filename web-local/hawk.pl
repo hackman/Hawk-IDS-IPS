@@ -20,20 +20,12 @@ use lib '/home/sentry/hackman/cpustats/modules/';
 #use lib '/home/oneh/api/lib';
 use parse_config;
 
-my $conf = '/home/sentry/hackman/cpustats/hawk.conf';
+my $conf = '/home/sentry/hackman/hawk-web.conf';
 #my $conf = '/home/oneh/api/etc/hawk.conf';
 my %config = parse_config($conf);
 my $VERSION = '0.1.0';
 
 my %srvhash = split(/[: ]/, $config{'service_names'});
-#my %srvhash = (
-#	"0" => "ftp",
-#	"1" => "ssh",
-#	"2" => "pop3",
-#	"3" => "imap",
-#	"4" => "webmail",
-#	"5" => "cPanel"
-#);
 
 sub web_error {
 	print "Content-type: text/plain\r\n\r\n";
@@ -41,17 +33,29 @@ sub web_error {
 	exit 1;
 }
 
+sub offset_to_interval {
+	my $offset = $_[0];
+	my $abs_offset = abs($offset);
+	my $interval = '';
+	$interval = "+ '0$abs_offset:00:00'::interval" if ($offset > 0);
+	$interval = "- '0$abs_offset:00:00'::interval" if ($offset < 0);
+	return $interval;
+}
+
+my $time_offset = "+ '00:00:00'::interval";
+$time_offset = offset_to_interval($config{'time_offset'}) if defined($config{'time_offset'});
+
 my $conn   = DBI->connect("$config{'db'}", $config{'dbuser'}, $config{'dbpass'}, { PrintError => 1, AutoCommit => 1 } ) or web_error("Unable to connect to pgsql: $DBI::errstr");
 
 my $charts_24h_query = "
-	SELECT COUNT(id), TO_CHAR(date_trunc('hour', date), 'HH24:MI') AS hourly
+	SELECT COUNT(id), TO_CHAR(date_trunc('hour', date $time_offset), 'HH24:MI') AS hourly
 	FROM %s
 	WHERE \"date\" > (now() - interval \'24 hour\')
 	GROUP BY hourly
 ";
 
 my $brutes_24h = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service
+	SELECT TO_CHAR(date '.$time_offset.', \'YYYY-MM-DD HH:MI:SS\'), ip, service
 	FROM broots
 	WHERE date > now() - interval \'24 hours\'
 	OFFSET ?
@@ -65,7 +69,7 @@ my $brutes_24h_count = "
 ";
 
 my $failed_24h = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, service, "user"
+	SELECT TO_CHAR(date '.$time_offset.', \'YYYY-MM-DD HH:MI:SS\'), ip, service, "user"
 	FROM failed_log
 	WHERE date > now() - interval \'24 hours\'
 	OFFSET ?
@@ -86,7 +90,7 @@ my $brutes_count = $conn->prepare('
 ');
 
 my $select_brutes = $conn->prepare('
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip
+	SELECT TO_CHAR(date '.$time_offset.', \'YYYY-MM-DD HH:MI:SS\'), ip
 	FROM broots
 	WHERE date > now() - interval \'24 hour\'
 	AND service = ?
@@ -107,13 +111,13 @@ my $failed_summary_query = "
 ";
 
 my $select_blocked_ip = $conn->prepare('
-	SELECT TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'), TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'), ip, reason
+	SELECT TO_CHAR(date_add '.$time_offset.', \'YYYY-MM-DD HH:MI:SS\'), TO_CHAR(date_rem '.$time_offset.', \'YYYY-MM-DD HH:MI:SS\'), ip, reason
 	FROM blacklist
 	WHERE ip=?
 ');
 
 my $failed_ip_query = "
-	SELECT TO_CHAR(date, \'YYYY-MM-DD HH:MI:SS\'), ip, \"user\", service
+	SELECT TO_CHAR(date $time_offset, \'YYYY-MM-DD HH:MI:SS\'), ip, \"user\", service
 	FROM failed_log
 	WHERE date > now() - interval '%s'
 	AND ip=?
@@ -130,8 +134,8 @@ my $failed_ip_query_count = "
 
 my $select_blocked = $conn->prepare('
 	SELECT
-		TO_CHAR(date_add, \'YYYY-MM-DD HH:MI:SS\'),
-		TO_CHAR(date_rem, \'YYYY-MM-DD HH:MI:SS\'),
+		TO_CHAR(date_add '.$time_offset.', \'YYYY-MM-DD HH:MI:SS\'),
+		TO_CHAR(date_rem '.$time_offset.', \'YYYY-MM-DD HH:MI:SS\'),
 		ip,
 		reason
 	FROM
@@ -147,6 +151,70 @@ my $get_blocked_count = "
 		COUNT(ip)
 	FROM
 		blacklist
+";
+
+# 1 hour queries, needed by master interface
+
+my $broots_1h_query = "
+	SELECT
+		COUNT(id) AS id 
+	FROM
+		broots 
+	WHERE
+		date > now() - interval \'1 hour\'
+";
+
+my $failed_1h_query = "
+	SELECT
+		COUNT(id) AS id 
+	FROM
+		failed_log 
+	WHERE
+		date > now() - interval \'1 hour\'
+";
+
+my $blacklisted_1h_active_query = "
+	SELECT 
+		COUNT(id) AS count 
+	FROM
+		blacklist 
+	WHERE
+		date_add > now() - interval \'1 hour\'
+	AND
+		date_rem IS NULL
+";
+
+my $blacklisted_daily_active_query = "
+	SELECT
+		COUNT(id) AS count 
+	FROM
+		blacklist 
+	WHERE
+		date_rem IS NULL
+	AND
+		date_add > now() - interval \'24 hours\'
+";
+
+my $blacklisted_1h_removed_query = "
+	SELECT 
+		COUNT(id) AS count 
+	FROM
+		blacklist 
+	WHERE
+		date_rem IS NOT NULL
+	AND
+		date_rem > now() - interval \'1 hour\'
+";
+
+my $blacklisted_daily_removed_query = "
+	SELECT 
+		COUNT(id) AS count
+	FROM
+		blacklist 
+	WHERE
+		date_rem IS NOT NULL
+	AND
+		date_rem > now() - interval \'24 hours\'
 ";
 
 if (defined(param('id'))) {
@@ -319,6 +387,17 @@ if (defined(param('id'))) {
 		}
 		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
 		print $json->encode(\%result);
+	} elsif ($id == 10) {
+		my @stats;
+		my $broots_1h = $conn->selectrow_array($broots_1h_query);
+		my $failed_1h = $conn->selectrow_array($failed_1h_query);
+		my $blacklisted_1h_active = $conn->selectrow_array($blacklisted_1h_active_query);
+		my $blacklisted_daily_active = $conn->selectrow_array($blacklisted_daily_active_query);
+		my $blacklisted_1h_removed = $conn->selectrow_array($blacklisted_1h_removed_query);
+		my $blacklisted_daily_removed = $conn->selectrow_array($blacklisted_daily_removed_query);
+		@stats = [$broots_1h, $failed_1h, $blacklisted_1h_active, $blacklisted_daily_active, $blacklisted_1h_removed, $blacklisted_daily_removed];
+		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
+		print $json->encode(\@stats);
 	}
 } else {
 	print "Content-type: text/plain\r\n\r\n";
