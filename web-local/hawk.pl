@@ -280,7 +280,7 @@ if (defined(param('id'))) {
 			while (my @data = $charts_24h->fetchrow_array) {
 				$interval{$data[1]} = $data[0];
 			}
-			for (my $i=0; $i<24; $i++) {
+			for (my $i=23; $i>=0; $i--) {
 				$new=($hour-$i)%24;
 				if ($new < 10) {
 					$new = "0$new:00";

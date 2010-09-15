@@ -289,14 +289,14 @@ function ShowResults(ipaddr) {
 							displayName: 'bruteforce attempts',
 							yField: 'brutes',
 							style: {
-								color:0xff0000,
+								color:0x6696e2,
 							}
 						},{
 							type:'column',
 							displayName: 'failed attempts',
 							yField: 'failed',
 							style: {
-								color: 0x0000ff,
+								color: 0x256900,
 							}
 						}],
 			        })
@@ -537,8 +537,8 @@ Ext.onReady(function(){
 	var charts_store;
 	var chartsObj = new Object({
 		options: [
-			{title: '<a href="javascript:void(0);" onclick="Show_Brutes()">Bruteforce attempts statistics</a>', type: 'broots', name: 'bruteforce attempts', color: '0xff0000'},
-			{title: '<a href="javascript:void(0);" onclick="Show_Failed()">Failed login attempts</a>', type: 'failed_log', name: 'failed attempts', color: '0x0000ff'}
+			{title: '<a href="javascript:void(0);" onclick="Show_Brutes()">Bruteforce attempts statistics</a>', type: 'broots', name: 'bruteforce attempts', color: '0x6696e2'},
+			{title: '<a href="javascript:void(0);" onclick="Show_Failed()">Failed login attempts</a>', type: 'failed_log', name: 'failed attempts', color: '0x256900'}
 		]
 	});
 	
@@ -572,6 +572,10 @@ Ext.onReady(function(){
 					extraStyle: {
 						legend: {
 							display: 'bottom'
+						},
+						xAxis: {
+							labelRotation: -45,
+							hideOverlappingLabels: false
 						},
 					},
 					series: [{
