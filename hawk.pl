@@ -6,7 +6,7 @@ use warnings;
 use DBD::Pg;
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
 
-use lib '/home/oneh/api/lib';
+use lib '/home/1h/api/lib';
 use parse_config;
 
 $SIG{"CHLD"} = \&sigChld;
@@ -18,7 +18,7 @@ my $VERSION = '5.1.2';
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
 
-my $debug = 1;
+my $debug = 0;
 $debug = 1 if (defined($ARGV[0]));
 
 # This will be our function that will print all logger requests to /var/log/$logfile
@@ -27,18 +27,18 @@ sub logger {
 }
 
 # Get and return the primary ip address of the server from ip a l
-sub get_ip {
-	my @ip = ();
-	open IP, "/sbin/ip a l |" or die "DIE: Unable to get local IP Address: $!\n";
-	while (<IP>) {
-		next if ($_ !~ /eth0$/);
-		@ip = split /\s+/, $_;
-		$ip[2] =~ s/\/[0-9]+//;
-		logger("Server ip: $ip[2]") if ($debug);
-	}
-	close IP;
-	return $ip[2];
-}
+#sub get_ip {
+#	my @ip = ();
+#	open IP, "/sbin/ip a l |" or die "DIE: Unable to get local IP Address: $!\n";
+#	while (<IP>) {
+#		next if ($_ !~ /eth0$/);
+#		@ip = split /\s+/, $_;
+#		$ip[2] =~ s/\/[0-9]+//;
+#		logger("Server ip: $ip[2]") if ($debug);
+#	}
+#	close IP;
+#	return $ip[2];
+#}
 
 # Compare the current attacker's ip address with the local ips (primary and localhost)
 sub is_local_ip {
@@ -237,11 +237,10 @@ sub ssh_broot {
 		$sshd[13] =~ s/::ffff://;
 		$sshd[13] =~ s/rhost=//;
 		$ip = $sshd[13];
-		$user = $sshd[14];
+		$user = $1 if ($sshd[14] =~ /user=(.*)/);
 		logger("sshd: Incorrect PAM $user $ip") if ($debug);
 	} elsif ($sshd[5] =~ /Bad/ ) {
 		#May 15 09:33:45 serv01 sshd[29645]: Bad protocol version identification '0penssh-portable-com' from 194.204.32.101
-		my @sshd = split /\s+/, $_;
 		$sshd[11] =~ s/::ffff://;
 		$ip = $sshd[11];
 		$user = 'none';
@@ -261,7 +260,6 @@ sub ssh_broot {
 		return undef;
 	}
 
-	$_ =~ s/\'//g;
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
 	# service id 1 -> ssh
@@ -312,7 +310,7 @@ sub cpanel_webmail_broot {
 # This is the main function which calls all other functions
 # The entire logic is stored here
 sub main {
-	my $conf = '/home/oneh/api/etc/hawk.conf';
+	my $conf = '/home/1h/api/etc/hawk.conf';
 	my %config = parse_config($conf);
 
 	# Hawk files
