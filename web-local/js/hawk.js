@@ -27,7 +27,7 @@ function Show_Brutes() {
 		progressText: 'Loading...',
 		width:300,
 		wait:true,
-		waitConfig: {interval:200},
+		waitConfig: {interval:200}
 	});
 	var brutes_store = new Ext.data.JsonStore({
 		autoLoad: true,
@@ -76,7 +76,7 @@ function Show_Brutes() {
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
-			'margin-bottom': '10px',
+			'margin-bottom': '10px'
 		},
 		bbar: {
 			xtype: 'paging',
@@ -101,7 +101,7 @@ function Show_Failed() {
 		progressText: 'Loading...',
 		width:300,
 		wait:true,
-		waitConfig: {interval:200},
+		waitConfig: {interval:200}
 	});
 	var failed_store = new Ext.data.JsonStore({
 		autoLoad: true,
@@ -151,7 +151,7 @@ function Show_Failed() {
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
-			'margin-bottom': '10px',
+			'margin-bottom': '10px'
 		},
 		bbar: {
 			xtype: 'paging',
@@ -197,8 +197,7 @@ function ShowResults(ipaddr) {
 		progressText: 'Searching...',
 		width:300,
 		wait:true,
-		waitConfig: {interval:200},
-		//icon:'ext-mb-info'
+		waitConfig: {interval:200}
 	});
 	
 	var search_store = new Ext.data.JsonStore({
@@ -212,7 +211,7 @@ function ShowResults(ipaddr) {
 			{name: 'date_added', mapping: 0},
 			{name: 'date_removed', mapping: 1},
 			{name: 'ip', mapping: 2},
-			{name: 'reason', mapping: 3},
+			{name: 'reason', mapping: 3}
 		],
 		listeners: {
 			load: function() {
@@ -239,7 +238,7 @@ function ShowResults(ipaddr) {
 							}
 						},
 						{header: 'IP address', width: 100},
-						{header: 'Reason', width: 400},
+						{header: 'Reason', width: 400}
 					],
 					width: 800,
 					height: 50,
@@ -249,8 +248,8 @@ function ShowResults(ipaddr) {
 					style: {
 						'margin-top': '10px',
 						'margin-left': 'auto',
-						'margin-right': 'auto',
-					},
+						'margin-right': 'auto'
+					}
 				});
 
 				var charts_store = new Ext.data.JsonStore({
@@ -272,7 +271,7 @@ function ShowResults(ipaddr) {
 					height:220,
 					style: {
 						float: 'left',
-						'margin': 5,
+						'margin': 5
 					},
 					items:  new Ext.chart.LineChart({
 						store: charts_store,
@@ -282,23 +281,23 @@ function ShowResults(ipaddr) {
 						extraStyle: {
 							legend: {
 								display: 'bottom'
-							},
+							}
 						},
 						series: [{
 							type: 'column',
 							displayName: 'bruteforce attempts',
 							yField: 'brutes',
 							style: {
-								color:0x6696e2,
+								color:0x6696e2
 							}
 						},{
 							type:'column',
 							displayName: 'failed attempts',
 							yField: 'failed',
 							style: {
-								color: 0x256900,
+								color: 0x256900
 							}
-						}],
+						}]
 			        })
 				});
 				CommonWin.removeAll();
@@ -317,7 +316,7 @@ function Show_Services(type) {
 		progressText: 'Loading...',
 		width:300,
 		wait:true,
-		waitConfig: {interval:200},
+		waitConfig: {interval:200}
 	});
 	var services_store = new Ext.data.JsonStore({
 		autoLoad: true,
@@ -356,7 +355,7 @@ function Show_Services(type) {
 						style: {
 							'margin-top': '10px',
 							'margin-left': 'auto',
-							'margin-right': 'auto',
+							'margin-right': 'auto'
 						}
 					});
 
@@ -378,7 +377,7 @@ function Show_IP_Details(ipaddr, interval) {
 		progressText: 'Loading...',
 		width:300,
 		wait:true,
-		waitConfig: {interval:200},
+		waitConfig: {interval:200}
 	});
 	var details_store = new Ext.data.JsonStore({
 		autoLoad: true,
@@ -386,7 +385,7 @@ function Show_IP_Details(ipaddr, interval) {
 		baseParams: {
 			id: '8',
 			interval: interval,
-			ip: ipaddr,
+			ip: ipaddr
 		},
 		root: 'data',
 		totalProperty: 'total',
@@ -456,13 +455,13 @@ function showBlocked() {
 		progressText: 'Loading...',
 		width:300,
 		wait:true,
-		waitConfig: {interval:200},
+		waitConfig: {interval:200}
 	});
 	var blocked_store = new Ext.data.JsonStore({
 		autoLoad: true,
 		url: base_url,
 		baseParams: {
-			id: '9',
+			id: '9'
 		},
 		root: 'data',
 		totalProperty: 'total',
@@ -513,7 +512,7 @@ function showBlocked() {
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
-			'margin-bottom': '10px',
+			'margin-bottom': '10px'
 		},
 		bbar: {
 			xtype: 'paging',
@@ -562,7 +561,7 @@ Ext.onReady(function(){
 				height:220,
 				style: {
 					float: 'left',
-					'margin': 5,
+					'margin': 5
 				},
 				items: {
 					xtype: 'linechart',
@@ -576,7 +575,7 @@ Ext.onReady(function(){
 						xAxis: {
 							labelRotation: -45,
 							hideOverlappingLabels: false
-						},
+						}
 					},
 					series: [{
 						type: 'line',
@@ -584,8 +583,8 @@ Ext.onReady(function(){
 						style: {
 							color: chartsObj.options[j].color,
 							size: config.chartDotSize,
-							lineSize: config.chartLineSize,
-						},
+							lineSize: config.chartLineSize
+						}
 					}]	
 				}
 			})
@@ -601,11 +600,11 @@ Ext.onReady(function(){
 		style: {
 			'margin-top': '10px',
 			'margin-left': 'auto',
-			'margin-right': 'auto',
+			'margin-right': 'auto'
 		},
 		items: [{
 				title: '<a href="http://portal.sgadmins.com/index.html?action=3">Back to master interface</a>',
-				items: charts,
+				items: charts
 		}],
 		bbar:{
 			items: ['-','<label for="ipaddr">Search for blocked IP address: </label>',
@@ -621,7 +620,7 @@ Ext.onReady(function(){
 							if (Ext.EventObject.getKey(event) == event.ENTER) {
 								ShowResults(field.getValue());
 							};
-						},
+						}
 					},
 					onTriggerClick: function(field) {
 						ShowResults(this.getValue());
@@ -691,10 +690,10 @@ Ext.onReady(function(){
 		style: {
 			'margin-top': 'auto',
 			'margin-left': 'auto',
-			'margin-right': 'auto',
+			'margin-right': 'auto'
 		},
 		renderTo: 'main',
-		title: 'Bruteforce attempts statistics per service',      
+		title: 'Bruteforce attempts statistics per service'      
 	});
 	
 	var summary_store;
@@ -703,8 +702,8 @@ Ext.onReady(function(){
  		options: [
 			{interval: '1 hours', title: '1 hour summary'},
 			{interval: '24 hours', title: 'Daily summary'},
-			{interval: '1 weeks', title: 'Weekly summary'},
-		],
+			{interval: '1 weeks', title: 'Weekly summary'}
+		]
 	});
 	for (var i=0; i<summaryObj.options.length; i++) {
 		summary_store = new Ext.data.JsonStore({
@@ -736,7 +735,7 @@ Ext.onReady(function(){
 					float: 'left',
 					'margin': 5
 				},
-				title: summaryObj.options[i].title,      
+				title: summaryObj.options[i].title      
 			})
 		);
 	}
@@ -764,7 +763,7 @@ Ext.onReady(function(){
 			'margin-top': '10px',
 			'margin-left': 'auto',
 			'margin-right': 'auto',
-			'margin-bottom': '10px',
+			'margin-bottom': '10px'
 		},
 		items: [{
 				title: 'Summary report',
