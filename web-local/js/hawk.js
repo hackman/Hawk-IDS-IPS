@@ -531,6 +531,10 @@ function showBlocked() {
 	CommonWin.show();
 }
 
+function goToMaster () {
+	window.location = 'http://portal.sgadmins.com/index.html?action=5';
+}
+
 Ext.onReady(function(){
 	var charts = new Array();
 	var charts_store;
@@ -603,7 +607,7 @@ Ext.onReady(function(){
 			'margin-right': 'auto'
 		},
 		items: [{
-				title: '<a href="http://portal.sgadmins.com/index.html?action=3">Back to master interface</a>',
+				title: "<a onclick='goToMaster();' href='#'><b>Back to master interface</b></a>",
 				items: charts
 		}],
 		bbar:{
