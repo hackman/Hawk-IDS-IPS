@@ -225,11 +225,12 @@ sub ssh_broot {
 		$sshd[13] =~ s/::ffff://;
 		$sshd[13] =~ s/rhost=//;
 		$ip = $sshd[13];
-		$user = $sshd[14];
+		#$user = $sshd[14];
+		$user = $1 if ($sshd[14] =~ /user=(.*)/);
 		logger("sshd: Incorrect PAM $user $ip") if ($debug);
 	} elsif ($sshd[5] =~ /Bad/ ) {
 		#May 15 09:33:45 serv01 sshd[29645]: Bad protocol version identification '0penssh-portable-com' from 194.204.32.101
-		my @sshd = split /\s+/, $_;
+		#my @sshd = split /\s+/, $_;
 		$sshd[11] =~ s/::ffff://;
 		$ip = $sshd[11];
 		$user = 'none';
@@ -249,7 +250,6 @@ sub ssh_broot {
 		return undef;
 	}
 
-	$_ =~ s/\'//g;
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
 	# service id 1 -> ssh
