@@ -13,7 +13,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';        # remove unsecure path
-my $VERSION = '5.1.2';
+my $VERSION = '5.1.3';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -25,20 +25,6 @@ $debug = 1 if (defined($ARGV[0]));
 sub logger {
 	print HAWKLOG strftime('%b %d %H:%M:%S', localtime(time)) . ' ' . $_[0] . "\n" and return 1 or return 0;
 }
-
-# Get and return the primary ip address of the server from ip a l
-#sub get_ip {
-#	my @ip = ();
-#	open IP, "/sbin/ip a l |" or die "DIE: Unable to get local IP Address: $!\n";
-#	while (<IP>) {
-#		next if ($_ !~ /eth0$/);
-#		@ip = split /\s+/, $_;
-#		$ip[2] =~ s/\/[0-9]+//;
-#		logger("Server ip: $ip[2]") if ($debug);
-#	}
-#	close IP;
-#	return $ip[2];
-#}
 
 # Compare the current attacker's ip address with the local ips (primary and localhost)
 sub is_local_ip {
@@ -148,6 +134,8 @@ sub check_broots {
 sub do_block {
 	my $blocked_ip = shift;
 	my $block_list = shift;
+	$block_list =~ s/(\r|\n)//g;
+	$blocked_ip = $1 if ($blocked_ip =~ /([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/) or logger ("Illegal ip content at $blocked_ip") and return 0;
 	if (system("/sbin/iptables -I in_hawk -s $blocked_ip -j DROP")) {
 		logger("/sbin/iptables -I in_hawk -s $blocked_ip -j DROP FAILED: $!");
 		return 0;
@@ -237,10 +225,11 @@ sub ssh_broot {
 		$sshd[13] =~ s/::ffff://;
 		$sshd[13] =~ s/rhost=//;
 		$ip = $sshd[13];
-		$user = $1 if ($sshd[14] =~ /user=(.*)/);
+		$user = $sshd[14];
 		logger("sshd: Incorrect PAM $user $ip") if ($debug);
 	} elsif ($sshd[5] =~ /Bad/ ) {
 		#May 15 09:33:45 serv01 sshd[29645]: Bad protocol version identification '0penssh-portable-com' from 194.204.32.101
+		my @sshd = split /\s+/, $_;
 		$sshd[11] =~ s/::ffff://;
 		$ip = $sshd[11];
 		$user = 'none';
@@ -260,6 +249,7 @@ sub ssh_broot {
 		return undef;
 	}
 
+	$_ =~ s/\'//g;
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
 	# service id 1 -> ssh
@@ -338,15 +328,8 @@ sub main {
 	
 	my $start_time = time();
 
-	# Store all attacker's ip addresses + the relevant information inside the hash array
-	# Hash structure
-	#	$hack_attempts{KEY} -> attacker's ip address
-	#	$hack_attempts{ip}[0] -> total number of failed login attempts so far from that ip for ALL services
-	#	$hack_attempts{ip}[1] -> service code of the last service where that ip failed to login/authenticate
-	#	$hack_attempts{ip}[2] -> the last user which failed to authenticate from that ip
-	#	$hack_attempts{ip}[3] -> is this ip address already stored to the broots table thus blocked. this is used so we can avoid adding duplicate entries for single ip
-	#					 		 also this will avoid adding multiple iptables rules for a single ip
-	my %hack_attempts = ();
+	my $hack_attempt = ();
+	my $attacked_svcs = ();
 	
 	# What the name of the pid will be in ps auxwf :)
 	$0 = $config{'daemon_name'};
@@ -402,7 +385,7 @@ sub main {
 		# if this is a real attack from non local ip the attacker's ip, the number of failed attempts, the bruteforced service and the failed user are stored to @block_results
 
 		# $block_results[0] - attacker's ip address
-		# $block_results[1] - number of failed attempts. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$ip}[0]
+		# $block_results[1] - number of failed attempts. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempt{svc}{$ip}
 		# $block_results[2] - each service parser return it's own unique service id which is the id of the service which is under attack
 		# $block_results[3] - the username that failed to authenticate to the given service
 		my @block_results = undef;
@@ -428,6 +411,7 @@ sub main {
 				@block_results = pureftpd_broot($_);
 			}
 		}
+
 		if ($config{'watch_proftpd'}) {
 			#Aug 27 06:43:28 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER user: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
 			#Aug 27 06:43:47 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER werethet: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
@@ -445,6 +429,7 @@ sub main {
 				@block_results = dovecot_broot($_); # Pass the log line to the pop_imap_broot parser and get the attacker's details
 			}
 		}
+
 		if ($config{'watch_courier'}) {
 			#Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
 			#Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=kur, ip=[::ffff:87.118.135.130]
@@ -459,77 +444,76 @@ sub main {
 		next if (@block_results < 2);
 		next if (is_local_ip(\%whitelists, $block_results[0]));
 	
-		# $hack_attempts{KEY} -> attacker's ip address
-		# $hack_attempts{ip}[0] -> total number of failed login attempts so far from that ip for ALL services
-		# $hack_attempts{ip}[1] -> service code of the last service where that ip failed to login/authenticate
-		# $hack_attempts{ip}[2] -> the last user which failed to authenticate from that ip
-		# $hack_attempts{ip}[3] -> is this ip address already stored to the broots table
-		# $hack_attempts{ip}[4] -> Is this IP blocked. this is used so we can avoid blocking duplicate entries for single ip.
-
 		# $block_results[0] - attacker's ip address
-		# $block_results[1] - number of failed attempts. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$ip}[0]
+		# $block_results[1] - number of failed attempts. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$svc}{$ip}
 		# $block_results[2] - each service parser return it's own unique service id which is the id of the service which is under attack
 		# $block_results[3] - the username that failed to authenticate to the given service
-		# If the service log parser returned valid attacker response instead of undef we store the attack attempt to the database
-		#if (@block_results > 1 && ! is_local_ip($local_ip, $block_results[0])) {
 
-		# Update the total failed attempts for the particular ip. If this ip is unknown to us we init $hack_attempts hash key for it
-		# The total failed attempts calculations are made by get_attempts() function
-		$hack_attempts{$block_results[0]}[0] = get_attempts($block_results[1], $hack_attempts{$block_results[0]}[0]);
-		# Store the service id of the last failed attempt for that ip
-		$hack_attempts{$block_results[0]}[1] = $block_results[2];
-		logger("got attacker. storing it to failed_log: 0, $block_results[0], $block_results[1], $block_results[1]");
-
-		# Finally write down the failed attempt to the database
-		# store_to_db arguments: 0 - store to failed_log, attacker ip, service ID, failed username, .... db details
+		my $curr_time = time();
+		# Store this failed attempt to the database
+		logger("Storing failed: 0, $block_results[0], $block_results[2], $block_results[3]") if ($debug);
 		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $block_results[0], $block_results[2], $block_results[3])) {
 			logger("store_to_db failed: 0, $block_results[0], $block_results[2], $block_results[3]!");
 		}
 
-		# Check for broots as we just had one new failed attempt above
-		while (my $ip = each (%hack_attempts)) {
-			# Skip this ip if it is already added to the database
-			#logger("$ip is already added to the broots db") and next if (defined($hack_attempts{$ip}[3] && $hack_attempts{$ip}[3]));
-			# Skip this ip if it's number of failed attempts are less than the required from the conf
-			if ($set_limit) {
-				logger("Block on failed. $ip has $hack_attempts{$ip}[0] attempts. required $config{'block_count'} for block ") and next if (! check_broots($hack_attempts{$ip}[0], $config{"block_count"}));
+		$hack_attempt->{$block_results[2]}->{$block_results[0]} = get_attempts($block_results[1], $hack_attempt->{$block_results[2]}->{$block_results[0]});
+		logger("Failed attempts are $hack_attempt->{$block_results[2]}->{$block_results[0]}") if ($debug);
+
+		if ($set_limit && check_broots($hack_attempt->{$block_results[2]}->{$block_results[0]}, $config{"block_count"})) {
+			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $block_results[0], $block_results[2]);
+			if (! do_block($block_results[0], $config{'block_list'})) {
+				logger("Failed to block $block_results[0] and store it to $config{'block_list'}") if ($debug);
 			} else {
-				logger("Block on brute. $ip has $hack_attempts{$ip}[0] attempts. required $config{'max_attempts'} for block ") and next if (! check_broots($hack_attempts{$ip}[0], $config{"max_attempts"}));
+				logger("Successfully blocked $block_results[0] and stored to $config{'block_list'}") if ($debug);
+				store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $block_results[0], $config{"block_count"}, "failed");
 			}
-			logger("store_to_db(broots): 1, $ip, $hack_attempts{$ip}[1]");
-			# The current attacker got >= config{"max_attempts"} in less than $broot_time seconds
-			# It will be handed over to the hawk.broots table for storage and later blocked by the hawk cron
-			$hack_attempts{$ip}[3] += store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $ip, $hack_attempts{$ip}[1]);
-			# The return results from store_to_db are later passed to $hack_attempts{$ip}[3]
+		} elsif (check_broots($hack_attempt->{$block_results[2]}->{$block_results[0]}, $config{"broot_number"})) {
+			#logger("store_to_db(broots): 1, ip, service code");
+			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $block_results[0], $block_results[2]);
 
-			next if (defined($hack_attempts{$ip}[4]) && $hack_attempts{$ip}[4]); # This IP is already blocked.
+			# Zero the number of failed attempts for this IP so we can prevent adding a new brute record on attempt_to_brute+1
+			$hack_attempt->{$block_results[2]}->{$block_results[0]} = 0;
 
-			if ($set_limit) {
-				if (! do_block($ip, $config{'block_list'})) {
-					logger("Failed to block $ip and store it to $config{'block_list'}") if ($debug);
-				} else {
-					logger("Successfully blocked $ip and stored to $config{'block_list'}") if ($debug);
-					store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $ip, $hack_attempts{$ip}[0], "failed");
-				}
-			} else {
-				if ($hack_attempts{$ip}[3] >= $config{'max_attempts'}) {
-					if (! do_block($ip, $config{'block_list'})) {
-						logger("Failed to block $ip and store it to $config{'block_list'}") if ($debug);
+			# Push that particular bruteforce attempt to the $attacked_svcs array ref
+			#push(@{$svc{'as'}}, @arr); 
+			push(@{$attacked_svcs->{$block_results[2]}}, [$curr_time, $block_results[0]]);
+
+			while( my ($service, @attackers) = each %$attacked_svcs ) {
+				my %attacks = ();
+
+				for (my $i = 0; $i < @{$attackers[0]}; $i++) {
+					# This is really old attack and we do not count it now + we delete its records
+					delete($attackers[0]->[$i]) and next if (($curr_time - $config{'broot_interval'}) > $attackers[0]->[$i]->[0]);
+
+					# Remove the remaining elements for that IP if it is already blocked
+					delete($attackers[0]->[$i]) and next if (defined($attacks{$attackers[0]->[$i]->[1]}[1]) && $attacks{$attackers[0]->[$i]->[1]}[1]);
+
+					# Increase the number of broot attempts for this IP
+					$attacks{$attackers[0]->[$i]->[1]}[0] = 0 if (! defined($attacks{$attackers[0]->[$i]->[1]}[0]));
+					$attacks{$attackers[0]->[$i]->[1]}[0]++;
+					#print "IP: $attackers[0]->[$i]->[1] Brutes: $attacks{$attackers[0]->[$i]->[1]}[0]\n";
+
+					# Next as the bruteforce attempts are not enough for blocking
+					next if ($attacks{$attackers[0]->[$i]->[1]}[0] < $config{'max_attempts'});
+
+					if (! do_block($attackers[0]->[$i]->[1], $config{'block_list'})) {
+						logger("Failed to block $attackers[0]->[$i]->[1] and store it to $config{'block_list'}") if ($debug);
 					} else {
-						logger("Successfully blocked $ip and stored to $config{'block_list'}") if ($debug);
-						store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $ip, $hack_attempts{$ip}[3], "bruteforce");
+						logger("Successfully blocked $attackers[0]->[$i]->[1] and stored to $config{'block_list'}") if ($debug);
+						$attacks{$attackers[0]->[$i]->[1]}[1] = store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $attackers[0]->[$i]->[1], $config{'max_attempts'}, "bruteforce");
 					}
 				}
 			}
+		} else {
+			logger("Not enough minerals to block $block_results[0] for bruteforcing $block_results[2] attempts $hack_attempt->{$block_results[2]}->{$block_results[0]}") if ($debug);
 		}
 	
-		my $curr_time = time();
-	
-		# clean all %hack_attempts entries if the $broot_time from the conf passed
+		# clean all %hack_attempt entries if the $broot_time from the conf passed
 		if (($curr_time - $start_time) > $broot_time) {
 			logger("Cleaning the faults hashes and resetting the timers") if ($debug);
-			# clean the hack_attempts hash and reset the timer
-			delete @hack_attempts{keys %hack_attempts};
+			# clean the hack_attempt hash and reset the timer
+			#delete @hack_attempt{keys \$hack_attempt};
+			$hack_attempt = {};
 			$start_time = time();	# set the start_time to now
 		}
 	}
@@ -614,13 +598,13 @@ In case of too many failed login attempts from a single IP address for certain p
 
 	- store_to_db() - We also store this particular attempt to the failed_log table.
 
-	- Check all attackers stored in %hack_attempts.
+	- Check all attackers stored in %hack_attempt.
 
 	- check_broots() - Compare the number of failed attempts for the current IP address with the max allowed failed attempts
 
 	- store_to_db() - If the IP reached/exceeded the max allowed failed attempts the IP is stored to the broots table
 
-	- Clear ALL IP addresses stored in %hack_attempts ONLY if $broot_time (USER CONFIGURABLE) seconds has elapsed and reset the timer
+	- Clear ALL IP addresses stored in %hack_attempt ONLY if $broot_time (USER CONFIGURABLE) seconds has elapsed and reset the timer
 
 	- Start over to MONITOR LOGS
 
@@ -640,23 +624,13 @@ In case of too many failed login attempts from a single IP address for certain p
 
 	- $broot_time - The amount of time in seconds that should elapse before clearing all hack attempts from the hash
 
-	- %hack_attempts - PERSISTENT (well not exactly :) storage for the IP addressess of all attackers that failed to identify to a given service for the last $broot_time seconds. After that the hash is cleared
-
-		$hack_attempts{ip}[0] - total number of failed login attempts so far from that ip for ALL services
-
-		$hack_attempts{ip}[1] - service code of the last service where that ip failed to login/authenticate
-
-		$hack_attempts{ip}[2] - the last user which failed to authenticate from that ip
-
-		$hack_attempts{ip}[3] -> is this ip address already stored to the broots table thus blocked. this is used so we can avoid adding duplicate entries for single ip also this will avoid adding multiple iptables rules for a single ip
-
 	- $local_ip - Primary IP address of the server
 
 	- @block_results - Temporary storage for the results returned by the service_name_parsers. If no results it should be undef.
 		
 		$block_results[0] - attacker's ip address
 
-		$block_results[1] - number of failed attempts as returned by the parser. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$ip}[0]
+		$block_results[1] - number of failed attempts as returned by the parser. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$svc}{$ip}
 
 		$block_results[2] - each service parser return it's own unique service id which is the id of the service which is under attack
 
