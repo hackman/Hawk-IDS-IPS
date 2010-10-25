@@ -303,6 +303,8 @@ if (defined(param('id'))) {
 		$result{'total'} = $conn->selectrow_array($brutes_24h_count);
 		$brutes_24h->execute($offset, $limit) or web_error("Unable to get brutes 24h from database: $DBI::errstr");
 		while (my @data = $brutes_24h->fetchrow_array) {
+			# Make sure to convert the service id back to service name for the web interface
+			$data[2] = $srvhash{$data[2]};
 			push(@{$result{'data'}}, [@data]);
 		}
 		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
@@ -314,6 +316,7 @@ if (defined(param('id'))) {
 		$result{'total'} = $conn->selectrow_array($failed_24h_count);
 		$failed_24h->execute($offset, $limit) or web_error("Unable to get failed 24h from database: $DBI::errstr");
 		while (my @data = $failed_24h->fetchrow_array) {
+			# Make sure to convert the service id back to service name for the web interface
 			$data[2] = $srvhash{$data[2]};
 			push(@{$result{'data'}}, [@data]);
 		}
