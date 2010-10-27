@@ -6,14 +6,14 @@ use warnings;
 use DBD::Pg;
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
 
-use lib '/home/1h/api/lib';
+use lib '/home/1h/lib/perl/';
 use parse_config;
 
 $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';        # remove unsecure path
-my $VERSION = '5.1.3';
+my $VERSION = '5.1.4';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
