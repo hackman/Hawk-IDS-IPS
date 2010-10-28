@@ -13,7 +13,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';        # remove unsecure path
-my $VERSION = '5.1.4';
+my $VERSION = '5.1.5';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -300,7 +300,7 @@ sub cpanel_webmail_broot {
 # This is the main function which calls all other functions
 # The entire logic is stored here
 sub main {
-	my $conf = '/home/1h/api/etc/hawk.conf';
+	my $conf = '/home/1h/etc/hawk.conf';
 	my %config = parse_config($conf);
 
 	# Hawk files
