@@ -111,7 +111,7 @@ if [ -d /usr/local/1h/lib/guardian/svcstop ]; then
 	touch /usr/local/1h/lib/guardian/svcstop/hawk
 fi
 
-if ( ! /etc/init.d/hawk start ); then
+if ( ! /etc/init.d/hawk restart ); then
    echo "/etc/init.d/hawk restart FAILED"
    exit 1
 fi
