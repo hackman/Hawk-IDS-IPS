@@ -1,8 +1,10 @@
 #!/bin/bash
-# 1H -                        Copyright(c) 2010 1H Ltd.
+# 1H - hawk_install.sh		                        Copyright(c) 2010 1H Ltd.
 #                                                        All rights Reserved.
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
+
+VERSION='0.0.3'
 
 # Various paths
 syspath='/home/1h/api'
@@ -12,6 +14,16 @@ db="$syspath/db/hawk.sql"
 user="hawk_local"
 dbname="hawk"
 pass=$(head -n 5 /dev/urandom  | md5sum  | cut -d " " -f1)
+
+if ( ! /usr/local/1h/bin/dns_setup.sh ); then
+	echo "[!] Failed to setup the 1h dns zone"
+	exit 1      
+fi      
+if ( ! /usr/local/1h/bin/add_1h_vhost.sh ); then
+	echo "[!] failed to add the 1h vhost to the httpd.conf"
+	exit 1
+fi
+
 
 su - postgres -c "psql -Upostgres template1 -c \"drop database $dbname\""
 su - postgres -c "psql -Upostgres template1 -c \"drop user $user\""
@@ -102,10 +114,10 @@ fi
 #		echo "Failed to set the correct link to the master interface but this is not fatal"
 #	fi
 #fi
-#if ( ! $bin_dir/lockit.sh hawk ); then
-#	echo "[!] Failed to password protect the web folder with $bin_dir/lockit.sh hawk"
-#	exit 1
-#fi
+if ( ! /usr/local/1h/bin/lockit.sh hawk ); then
+	echo "[!] Failed to password protect the web folder with /usr/local/1h/bin/lockit.sh hawk"
+	exit 1
+fi
 
 if ( ! chkconfig --add hawk ); then
     echo "chkconfig --add hawk FAILED"
