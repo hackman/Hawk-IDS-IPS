@@ -4,10 +4,10 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.0.3'
+VERSION='0.0.4'
 
 # Various paths
-syspath='/home/1h/api'
+syspath='/home/1h'
 conf="$syspath/etc/hawk.conf"
 db="$syspath/db/hawk.sql"
 # Define the PGSQL cpustats user and generate new password for it
