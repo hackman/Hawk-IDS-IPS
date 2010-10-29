@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-. /usr/loacal/1h/lib/sh/uninstall_funcs.sh
+. /usr/local/1h/lib/sh/uninstall_funcs.sh
 
 drop_db hawk
 drop_user hawk_local
