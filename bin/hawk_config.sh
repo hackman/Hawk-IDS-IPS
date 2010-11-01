@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.0.2'
+VERSION='0.0.3'
 
 for ip in $(ip -4 -oneline addr list | sed 's/\/[0-9]\{1,2\}//' | awk '{print $4}'); do
 	hawk_whitelist="$ip,$hawk_whitelist"
@@ -33,7 +33,7 @@ else
 	if [ ! -z "$maillogs" ]; then
 		echo "hawk_mailserver=$mailserver"
 		for maillog in $maillogs; do
-			hawk_logs="$maillog,$hawk_logs"
+			hawk_logs="$maillog $hawk_logs"
 		done
 	fi
 fi
@@ -41,14 +41,14 @@ fi
 cplogs='/usr/local/cpanel/logs/access_log /usr/local/cpanel/logs/login_log'
 for cplog in $cplogs; do
 	if [ -f "$cplog" ]; then
-		hawk_logs="$cplog,$hawk_logs"
+		hawk_logs="$cplog $hawk_logs"
 		sed -i -e '/watch_cpanel/s/=.*/=1/' /home/1h/etc/hawk.conf
 	fi
 done
 
 seclogs=$(grep 'authpriv.\*' /etc/syslog.conf | awk '{print $2}' | sed 's/-//g')
 for seclog in $seclogs; do
-	hawk_logs="$seclog,$hawk_logs"
+	hawk_logs="$seclog $hawk_logs"
 done
 
 ftpserver=$(awk -F = '/ftpserver=/{print $2}' /var/cpanel/cpanel.config)
@@ -66,7 +66,7 @@ if [ ! -z "$ftpserver" ]; then
 	fi
 	if [ ! -z "$infologs" ]; then
 		for infolog in $infologs; do
-			hawk_logs="$infolog,$hawk_logs"
+			hawk_logs="$infolog $hawk_logs"
 		done
 		echo "hawk_ftpserver=$ftpserver"
 	fi
