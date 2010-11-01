@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.0.4'
+VERSION='0.0.5'
 
 # Various paths
 syspath='/home/1h'
@@ -24,6 +24,10 @@ if ( ! /usr/local/1h/bin/add_1h_vhost.sh ); then
 	exit 1
 fi
 
+if ( ! /usr/local/1h/bin/hawk_config.sh ); then
+	echo "[!] hawk_config.sh failed"
+	exit 1
+fi
 
 su - postgres -c "psql -Upostgres template1 -c \"drop database $dbname\""
 su - postgres -c "psql -Upostgres template1 -c \"drop user $user\""

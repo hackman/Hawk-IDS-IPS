@@ -77,5 +77,5 @@ if [ -z "$hawk_logs" ]; then
 	exit 1
 fi
 echo "All logs are $hawk_logs"
-hawk_logs="$hawk_logs"
+hawk_logs=$(echo $hawk_logs | sed 's/\//\\\//g')
 sed -i "/monitor_list/s/=.*/=$hawk_logs/" /home/1h/etc/hawk.conf
