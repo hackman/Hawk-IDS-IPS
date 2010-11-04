@@ -607,7 +607,7 @@ Ext.onReady(function(){
 			'margin-right': 'auto'
 		},
 		items: [{
-				title: "<a onclick='goToMaster();' href='#'><b>Back to master interface</b></a>",
+				title: "<a onclick='goToMaster();' href='javascript:void(0)'><b>Back to master interface</b></a>",
 				items: charts
 		}],
 		bbar:{
