@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.0.5'
+VERSION='0.1.0'
 
 # Various paths
 syspath='/home/1h'
@@ -27,6 +27,46 @@ fi
 if ( ! /usr/local/1h/bin/hawk_config.sh ); then
 	echo "[!] hawk_config.sh failed"
 	exit 1
+fi
+
+if [ ! -x /etc/init.d/postgresql ]; then
+    echo "Postgresql server is not installed or it's init script is missing ... can not continue"
+    exit 1
+fi
+
+PGDATA=/var/lib/pgsql/data
+PGMAJORVERSION=$(psql -V | head -n 1 | awk '{print $3}' | sed 's/^\([0-9]*\.[0-9]*\).*$/\1/')
+if [ -z "$PGMAJORVERSION" ]; then
+    echo "Failed to obtaion PGMAJORVERSION"
+    exit 1
+fi
+
+if ( ! pgrep postmaster ); then
+    # If postgresql is not running
+    if [ -f "$PGDATA/PG_VERSION" ] && [ -d "$PGDATA/base" ]; then
+        if [ x`cat "$PGDATA/PG_VERSION"` != x"$PGMAJORVERSION" ]; then
+            echo "An old version of the database format was found. Trying to solve that now."
+            echo "You need to upgrade the data format before using PostgreSQL."
+            exit 1
+        fi
+    else
+        echo "$PGDATA is missing. Initializing it now"
+        if ( ! /etc/init.d/postgresql initdb ); then
+            echo "/etc/init.d/postgresql initdb failed"
+            exit 1
+        fi
+    fi
+    # Start postgresql please
+    if ( ! /etc/init.d/postgresql start ); then
+        echo "/etc/init.d/postgresql start failed"
+        exit 1
+    fi
+fi
+
+# Test the connection here please
+if ( ! su - postgres -c "if ( ! psql -Upostgres -c 'select 1+1;' ); then exit 1; fi" ); then
+    echo "Failed to test the connection to the postgresql database"
+    exit 1
 fi
 
 su - postgres -c "psql -Upostgres template1 -c \"drop database $dbname\""

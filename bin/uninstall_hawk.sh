@@ -4,7 +4,64 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-. /usr/local/1h/lib/sh/uninstall_funcs.sh
+VERSION='0.0.2'
+
+#. /usr/local/1h/lib/sh/uninstall_funcs.sh
+function check_err() {
+    if [ "$1" != 0 ]; then
+        echo "Error: $2"
+        exit 1
+    fi
+}
+
+function warn_err() {
+        if [ "$1" != 0 ]; then
+                echo "Warn: $2"
+        fi
+}
+
+function drop_user() {
+        if [ -f /root/.pgpass ]; then
+                # clean /root/.pgpass
+                sed -i "/.*[^\\]:.*[^\\]:.*[^\\]:$1:/D" /root/.pgpass
+                if [ "$?" != 0 ]; then
+                        echo "removing $1 from /root/.pgpass failed"
+                        return 1
+                fi
+        fi
+
+        # clean /var/lib/psql/data/pg_hba.conf
+        sed -i "/[ \t]*\w\+[ \t]\+\w\+[ \t]\+$1[ \t]/D" /var/lib/pgsql/data/pg_hba.conf
+        if [ "$?" != 0 ]; then
+                echo "failed to remove entries for user $1 from /var/lib/pgsql/data/pg_hba.conf"
+                return 1
+        fi
+
+        su - postgres -c "psql -Upostgres -c 'DROP USER $1;' template1"
+        if [ "$?" != 0 ]; then
+                echo "failed to drop PostgreSQL user $1"
+                return 1
+        fi
+        return 0
+}
+
+function drop_db() {
+        su - postgres -c "psql -Upostgres -c 'DROP DATABASE $1;' template1"
+        if [ "$?" != 0 ]; then
+                echo "failed to drop database $1"
+                return 1
+        fi
+        return 0
+}
+
+function reload_pg() {
+        /etc/init.d/postgresql reload
+        if [ "$?" != 0 ]; then
+                echo "failed to reload postgresql configuration"
+                return 1
+        fi
+        return 0
+}
 
 drop_db hawk
 drop_user hawk_local
