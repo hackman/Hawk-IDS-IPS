@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.1.0'
+VERSION='0.1.1'
 
 # Various paths
 syspath='/home/1h'
@@ -62,6 +62,15 @@ if ( ! pgrep postmaster ); then
         exit 1
     fi
 fi
+
+if ( ! chkconfig --add postgresql ); then
+	echo "chkconfig --add postgresql FAILED"
+	exit 1      
+fi      
+if ( ! chkconfig postgresql on ); then
+	echo "chkconfig postgresql on FAILED"
+	exit 1              
+fi       
 
 # Test the connection here please
 if ( ! su - postgres -c "if ( ! psql -Upostgres -c 'select 1+1;' ); then exit 1; fi" ); then
