@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.0.3'
+VERSION='0.0.4'
 
 #. /usr/local/1h/lib/sh/uninstall_funcs.sh
 function check_err() {
@@ -102,4 +102,8 @@ if [ -x /etc/init.d/crond ]; then
 	fi
 
 	rm -f /usr/local/1h/lib/guardian/svcstop/crond
+fi
+
+if [ -f /home/1h/public_html/index.html ]; then
+	sed -i '/hawk/D' /home/1h/public_html/index.html
 fi
