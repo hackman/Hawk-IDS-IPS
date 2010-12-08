@@ -14,6 +14,7 @@ var CommonWin = new Ext.Window({
 	resizable: false,
 	closeAction: 'hide',
 	modal: true,
+	layout: 'fit',
 	bbar: {}
 });
 
@@ -241,8 +242,7 @@ function ShowResults(ipaddr) {
 						{header: 'Reason', width: 400}
 					],
 					width: 800,
-					height: 50,
-					layout: 'fit',
+					autoHeight: true,
 					viewConfig: { forceFit: true },
 					loadMask: true,
 					style: {
