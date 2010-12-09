@@ -256,7 +256,8 @@ function ShowResults(ipaddr) {
 					autoLoad: true,
 					url: base_url,
 					baseParams: {
-						id: '7'
+						id: '7',
+						ip: ipaddr
 					},
 					fields: [
 						{name: 'hour', mapping: 0},
@@ -266,7 +267,7 @@ function ShowResults(ipaddr) {
 				});
 
 				var chart = new Ext.Panel({
-					title: 'Brute/Failed attempts statistics',
+					title: 'Brute/Failed attempts statistics for ' + ipaddr + ' (last 7 days)',
 					width:440,
 					height:220,
 					style: {
@@ -281,6 +282,9 @@ function ShowResults(ipaddr) {
 						extraStyle: {
 							legend: {
 								display: 'bottom'
+							},
+							xAxis: {
+								labelRotation: -15
 							}
 						},
 						series: [{
