@@ -1,4 +1,4 @@
-Ext.chart.Chart.CHART_URL = '../js/extjs/resources/charts.swf';
+Ext.chart.Chart.CHART_URL = 'js/extjs/resources/charts.swf';
 var base_url = 'hawk.pl';
 
 config = {
@@ -532,7 +532,7 @@ function showBlocked() {
 }
 
 function goToMaster () {
-	window.location = 'http://portal.sgadmins.com/index.html?action=5';
+	window.location = 'http://portal.1h.com/index.html?action=5';
 }
 
 Ext.onReady(function(){
@@ -607,7 +607,7 @@ Ext.onReady(function(){
 			'margin-right': 'auto'
 		},
 		items: [{
-				title: "<a onclick='goToMaster();' href='#'><b>Back to master interface</b></a>",
+				title: "<a onclick='goToMaster();' href='javascript:void(0)'><b>Back to master interface</b></a>",
 				items: charts
 		}],
 		bbar:{

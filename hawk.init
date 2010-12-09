@@ -1,19 +1,18 @@
 #!/bin/bash
 #                                                                     
 # hawk
-#	SiteGround Bruteforce attacks intrusion protection and logging system.
+#	1H Bruteforce attacks intrusion detection protection  and logging system.
 #                                                                     
 # chkconfig: 2345 99 17                                               
-# description: SiteGround hawk daemon monitors various files for unsuccessfull login attempts, block the offenders and store the attack info in a database
+# description: 1H [Hawk] daemon monitors various files for unsuccessfull login attempts, block the offenders and store the attack info in a database
 # probe: true     
-# version: 1.1
+# version: 3.0.2
 
-VERSION='3.0'
-hawkurl='http://sw.sgadmins.com/hawk/'
-pidfile='/var/run/hawk.pid'
-program='/home/oneh/api/sbin/hawk.pl'
-cron_program='/home/oneh/api/bin/hawk-blocker.sh'
-conf='/home/oneh/api/etc/hawk.conf'
+VERSION='3.0.2'
+pidfile='/usr/local/1h/var/run/hawk.pid'
+program='/usr/local/1h/sbin/hawk.pl'
+cron_program='/usr/local/1h/bin/hawk-unblock.sh'
+conf='/home/1h/etc/hawk.conf'
 
 check_status() {
 	check=0;
@@ -53,7 +52,6 @@ check_status() {
 start_program() {
 	# TODO
 	#	Make sure that the in_hawk exists and create it if needed
-	#	Make sure to load block_list from /home/oneh/api/etc/hawk.conf only if block is executable!
 	echo -n "Checking if in_hawk exists ... "
 	if ( ! iptables -t filter -L in_hawk -n >> /dev/null 2>&1 ); then
 		echo -n "[ NO ] ... "

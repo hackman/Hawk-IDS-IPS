@@ -1,8 +1,8 @@
 #!/usr/bin/perl
-
 #############################################
+#
 # Author: 
-#		Jivko Angelov <jivko@siteground.com> 
+#		Jivko Angelov <jivko@1h.com> 
 #
 # Version 0.1
 # Last update:	26.Mar.2010
@@ -16,14 +16,13 @@ use JSON::XS;
 use CGI qw/:standard/;
 use POSIX qw(strftime);
 
-use lib '/home/sentry/hackman/cpustats/modules/';
-#use lib '/home/oneh/api/lib';
+use lib '/home/1h/lib/perl';
 use parse_config;
 
-my $conf = '/home/sentry/hackman/hawk-web.conf';
-#my $conf = '/home/oneh/api/etc/hawk.conf';
+my $VERSION = '0.1.1';
+
+my $conf = '/home/1h/etc/hawk.conf';
 my %config = parse_config($conf);
-my $VERSION = '0.1.0';
 
 my %srvhash = split(/[: ]/, $config{'service_names'});
 
