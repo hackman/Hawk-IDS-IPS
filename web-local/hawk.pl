@@ -19,12 +19,20 @@ use POSIX qw(strftime);
 use lib '/home/1h/lib/perl';
 use parse_config;
 
-my $VERSION = '0.1.1';
+my $VERSION = '0.1.2';
 
 my $conf = '/home/1h/etc/hawk.conf';
 my %config = parse_config($conf);
 
 my %srvhash = split(/[: ]/, $config{'service_names'});
+
+my %interval_secs = (
+	"8hours" => '28800',
+	"daily" => '86400',
+	"weekly" => '604800',
+	"monthly" => '2678400',
+	"yearly" => '32140800'
+);
 
 sub web_error {
 	print "Content-type: text/plain\r\n\r\n";
@@ -41,6 +49,15 @@ sub offset_to_interval {
 	return $interval;
 }
 
+sub validate_ip {
+    if (defined($_[0]) &&
+        $_[0] =~ m/^((\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}))$/ &&
+        $2 <= 255 && $3 <= 255 && $4 <= 255 && $5 <=255 ) {
+        return $1;
+    }
+    return $_[1];
+}
+
 my $time_offset = "+ '00:00:00'::interval";
 $time_offset = offset_to_interval($config{'time_offset'}) if defined($config{'time_offset'});
 
@@ -51,6 +68,13 @@ my $charts_24h_query = "
 	FROM %s
 	WHERE \"date\" > (now() - interval \'24 hour\')
 	GROUP BY hourly
+";
+
+my $search_charts_query = "
+	SELECT COUNT(id), extract(\'epoch\' from date::date) AS daily
+	FROM %s
+	WHERE ip = ? AND date >= now() - interval \'1 week\'
+	GROUP BY daily
 ";
 
 my $brutes_24h = $conn->prepare('
@@ -335,30 +359,47 @@ if (defined(param('id'))) {
 			print $json->encode(\@result);
 		}
 	} elsif ($id == 7) {
-		my $charts_24h_broots = $conn->prepare(sprintf($charts_24h_query, "broots"));
-		$charts_24h_broots->execute() or web_error("Unable to get chart info from database: $DBI::errstr");
+		my $ip = validate_ip(param('ip'));
+		web_error("No or invalid IP supplied!") if (!defined($ip));
+		my $charts_24h_broots = $conn->prepare(sprintf($search_charts_query, "broots"));
+		$charts_24h_broots->execute($ip) or web_error("Unable to get chart info from database: $DBI::errstr");
 		my @charts = ();
-		my %brutes;
+		my @brutes;
 		while (my @data = $charts_24h_broots->fetchrow_array) {
-			$brutes{$data[1]} = $data[0];
+			push(@brutes, \@data);
 		}
-		my $charts_24h_failed = $conn->prepare(sprintf($charts_24h_query, "failed_log"));
-		$charts_24h_failed->execute() or web_error("Unable to get chart info from database: $DBI::errstr");
-		my %failed;
+		my $charts_24h_failed = $conn->prepare(sprintf($search_charts_query, "failed_log"));
+		$charts_24h_failed->execute($ip) or web_error("Unable to get chart info from database: $DBI::errstr");
+		my @failed;
 		while (my @data = $charts_24h_failed->fetchrow_array) {
-			$failed{$data[1]} = $data[0];
+			push(@failed, \@data);
 		}
-		my $hour = strftime('%H', localtime(time));
-		my $new;
-		for (my $i=0; $i<24; $i++) {
-			$new=($hour-$i)%24;
-			if ($new < 10) {
-				$new = "0$new:00";
+
+		my $timestamp = time();
+		my @date_arr = localtime($timestamp);
+
+		# we need to get today's timestamp
+		$timestamp -= $date_arr[0] + 60 * $date_arr[1] + 3600 * $date_arr[2];
+
+		my $temp_time = $timestamp - $interval_secs{'weekly'};
+		for (my $i = 1; $i <= 7; $i ++) {
+			$temp_time += $interval_secs{'daily'};
+			my @result = (strftime("%Y-%m-%d", localtime($temp_time)));
+
+			if (scalar(@brutes) > 0 && $brutes[0]->[1] == $temp_time) {
+				push(@result, shift(@brutes)->[0]);
 			} else {
-				$new = "$new:00";
-			}			
-			push(@charts, [$new, defined($brutes{$new}) ? $brutes{$new} : "0", defined($failed{$new}) ? $failed{$new} : "0"]);
+				push(@result, 0);
+			}
+			if (scalar(@failed) > 0 && $failed[0]->[1] == $temp_time) {
+				push(@result, shift(@failed)->[0]);
+			} else {
+				push(@result, 0);
+			}
+
+			push(@charts, \@result);
 		}
+
 		my $json = JSON::XS->new->ascii->pretty->allow_nonref;
 		print $json->encode(\@charts);
 	} elsif ($id == 8) {

@@ -14,8 +14,21 @@ var CommonWin = new Ext.Window({
 	resizable: false,
 	closeAction: 'hide',
 	modal: true,
+	layout: 'fit',
 	bbar: {}
 });
+
+function get_parameter(name) {
+	name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+	var regexS = "[\\?&]"+name+"=([^&#]*)";
+	var regex = new RegExp(regexS);
+	var results = regex.exec(window.location.href);
+	if (results == null) {
+		return "";
+	} else {
+		return results[1];
+	}
+}
 
 function CreateLink(value, action) {
 	return value + " " + action;
@@ -241,8 +254,7 @@ function ShowResults(ipaddr) {
 						{header: 'Reason', width: 400}
 					],
 					width: 800,
-					height: 50,
-					layout: 'fit',
+					autoHeight: true,
 					viewConfig: { forceFit: true },
 					loadMask: true,
 					style: {
@@ -256,7 +268,8 @@ function ShowResults(ipaddr) {
 					autoLoad: true,
 					url: base_url,
 					baseParams: {
-						id: '7'
+						id: '7',
+						ip: ipaddr
 					},
 					fields: [
 						{name: 'hour', mapping: 0},
@@ -266,7 +279,7 @@ function ShowResults(ipaddr) {
 				});
 
 				var chart = new Ext.Panel({
-					title: 'Brute/Failed attempts statistics',
+					title: 'Brute/Failed attempts statistics for ' + ipaddr + ' (last 7 days)',
 					width:440,
 					height:220,
 					style: {
@@ -281,6 +294,9 @@ function ShowResults(ipaddr) {
 						extraStyle: {
 							legend: {
 								display: 'bottom'
+							},
+							xAxis: {
+								labelRotation: -15
 							}
 						},
 						series: [{
@@ -536,6 +552,10 @@ function goToMaster () {
 }
 
 Ext.onReady(function(){
+	var title_master = "";
+	if (!get_parameter("local")) {
+		title_master = "<a onclick='goToMaster();' href='javascript:void(0)'><b>Back to master interface</b></a>";
+	}
 	var charts = new Array();
 	var charts_store;
 	var chartsObj = new Object({
@@ -607,7 +627,7 @@ Ext.onReady(function(){
 			'margin-right': 'auto'
 		},
 		items: [{
-				title: "<a onclick='goToMaster();' href='javascript:void(0)'><b>Back to master interface</b></a>",
+				title: title_master,
 				items: charts
 		}],
 		bbar:{
