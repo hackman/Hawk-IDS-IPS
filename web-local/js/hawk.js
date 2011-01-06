@@ -532,7 +532,7 @@ function showBlocked() {
 }
 
 function goToMaster () {
-	window.location = 'http://portal.1h.com/index.html?action=5';
+	window.location = masterLink;
 }
 
 Ext.onReady(function(){
