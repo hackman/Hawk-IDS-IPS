@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.1.1'
+VERSION='0.1.2'
 
 # Various paths
 syspath='/home/1h'
@@ -116,11 +116,13 @@ if ( ! cat $db | su - postgres -c "psql -Upostgres $dbname" ); then
     exit 1
 fi
 
-if ( ! grep hawk-unblock.sh /var/spool/cron/root ); then
-    if ( ! chattr -ia /var/spool/cron/root ); then
-        echo "[!] chattr -ia /var/spool/cron/root FAILED"
-        exit 1
-    fi
+if [ ! -f /var/spool/cron/root ] || ( ! grep hawk-unblock.sh /var/spool/cron/root ); then
+	if [ -f /var/spool/cron/root ]; then
+	    if ( ! chattr -ia /var/spool/cron/root ); then
+	        echo "[!] chattr -ia /var/spool/cron/root FAILED"
+	        exit 1
+	    fi
+	fi
     if ( ! echo '*/5 * * * * /usr/local/1h/bin/hawk-unblock.sh >> /usr/local/1h/var/log/hawk-unblock.log 2>&1' >> /var/spool/cron/root ); then
         echo "[!] Failed to add hawk-unblock.sh to the root cron"
         exit 1
@@ -131,7 +133,7 @@ if [ -d /usr/local/1h/lib/guardian/svcstop ]; then
 	touch /usr/local/1h/lib/guardian/svcstop/crond
 fi
 
-if ( ! /etc/init.d/crond restart ); then
+if [ -x /etc/init.d/crond ] && ( ! /etc/init.d/crond restart ); then
 	echo "/etc/init.d/crond restart failed"
 	exit 1
 fi
@@ -161,12 +163,6 @@ if ( ! rm -rf /var/cpanel/cphulk_enable ); then
 	exit 1
 fi
 
-#if [ -f $etc_dir/portal.conf ]; then
-#	. $etc_dir/portal.conf
-#	if ( ! sed -i "/window.location/s/'http.*\/\/.*'/'https:\/\/$portalmaster_url\/portal\/'/" /home/$system_user/api/cgi-bin/hawk/js/hawk.js ); then
-#		echo "Failed to set the correct link to the master interface but this is not fatal"
-#	fi
-#fi
 if ( ! /usr/local/1h/bin/lockit.sh hawk ); then
 	echo "[!] Failed to password protect the web folder with /usr/local/1h/bin/lockit.sh hawk"
 	exit 1
