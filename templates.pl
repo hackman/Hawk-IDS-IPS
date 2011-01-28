@@ -1,4 +1,4 @@
-<h2>Hawk Commercial Web Interface ver. 0.0.1</h2>
+<h2>Hawk OpenSource Web Interface ver. 0.0.1</h2>
 <hr>
 Menu: <a href="?action=listbroots">list broots</a> | <a href="?action=summery"> summery reports </a><br />
 Menu: <a href="?action=listfailed"> list failed </a> | <a href="?action=summery"> summery reports </a><br />
