@@ -1,4 +1,11 @@
 #!/usr/bin/perl -T
+# TODO
+# - Add ssh case for the following line please
+# Feb  3 03:14:43 centos sshd[16132]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=83.148.93.162  user=root
+# Feb  3 03:14:44 centos sshd[16132]: Failed password for root from 83.148.93.162 port 2681 ssh2
+# Feb  3 03:14:50 centos last message repeated 2 times
+# Feb  3 03:14:50 centos sshd[16134]: Connection closed by 83.148.93.162
+# Feb  3 03:14:50 centos sshd[16132]: PAM 2 more authentication failures; logname= uid=0 euid=0 tty=ssh ruser= rhost=83.148.93.162  user=root
 
 use strict;
 use warnings;
