@@ -127,6 +127,14 @@ if [ ! -f /var/spool/cron/root ] || ( ! grep hawk-unblock.sh /var/spool/cron/roo
         echo "[!] Failed to add hawk-unblock.sh to the root cron"
         exit 1
     fi
+	if [ -d /usr/local/1h/lib/guardian/svcstop ]; then
+		touch /usr/local/1h/lib/guardian/svcstop/crond
+	fi
+	if ( ! /etc/init.d/crond restart ); then
+		echo "/etc/init.d/crond restart failed"
+		exit 1
+	fi
+	rm -f /usr/local/1h/lib/guardian/svcstop/crond
 fi
 
 if [ -d /usr/local/1h/lib/guardian/svcstop ]; then
@@ -156,11 +164,12 @@ if ( ! cat /var/lib/pgsql/data/pg_hba.conf | grep -v ^$ | grep -v '\#' | awk '{p
     fi
 fi
 
-/usr/local/cpanel/etc/init/stopcphulkd
-
-if ( ! rm -rf /var/cpanel/cphulk_enable ); then
-	echo "[!] rm -rf /var/cpanel/cphulk_enable FAILED"
-	exit 1
+if [ -x /usr/local/cpanel/etc/init/stopcphulkd ]; then
+	/usr/local/cpanel/etc/init/stopcphulkd
+	if ( ! rm -rf /var/cpanel/cphulk_enable ); then
+		echo "[!] rm -rf /var/cpanel/cphulk_enable FAILED"
+		exit 1
+	fi
 fi
 
 if ( ! /usr/local/1h/bin/lockit.sh hawk ); then
@@ -189,3 +198,4 @@ fi
 
 rm -rf /usr/local/1h/lib/guardian/svcstop/hawk
 
+exit 0
