@@ -145,6 +145,7 @@ if [ -x /etc/init.d/crond ] && ( ! /etc/init.d/crond restart ); then
 	echo "/etc/init.d/crond restart failed"
 	exit 1
 fi
+
 rm -f /usr/local/1h/lib/guardian/svcstop/crond
 
 if [ ! -f /var/lib/pgsql/data/pg_hba.conf ]; then
