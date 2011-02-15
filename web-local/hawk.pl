@@ -423,6 +423,7 @@ if (defined(param('id'))) {
 		my $limit = (defined(param('limit')) && param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
 		my $offset = (defined(param('start')) && param('start') =~ /^([0-9]+)$/) ? $1 : 0;
 		my %result;
+		$result{'data'} = [];
 		$result{'total'} = $conn->selectrow_array($get_blocked_count);
 		$select_blocked->execute($offset, $limit) or web_error("Could not get blocked ips: $DBI::errstr\n");
 		while (my @data = $select_blocked->fetchrow_array()) {
