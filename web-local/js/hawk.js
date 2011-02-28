@@ -477,7 +477,9 @@ function showBlocked() {
 		autoLoad: true,
 		url: base_url,
 		baseParams: {
-			id: '9'
+			id: '9',
+			limit: 10,
+			start: 0
 		},
 		root: 'data',
 		totalProperty: 'total',
@@ -520,7 +522,7 @@ function showBlocked() {
 			{header: 'Reason', width: 315, sortable: true, dataIndex: 'reason'}
 		],
 		width: 750,
-		height: 480,
+		height: 280,
 		layout: 'fit',
 		viewConfig: { forceFit: true },
 		loadMask: true,
@@ -534,7 +536,7 @@ function showBlocked() {
 			xtype: 'paging',
 			id: 'pager',
 			store: blocked_store,
-			pageSize: 20,
+			pageSize: 10,
 			displayInfo: true,
 			displayMsg: '',
 			emptyMsg: ''
