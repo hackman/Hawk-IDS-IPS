@@ -1,4 +1,7 @@
 Ext.chart.Chart.CHART_URL = 'js/extjs/resources/charts.swf';
+
+var VERSION = '0.0.1';
+
 var base_url = 'hawk.pl';
 
 config = {
@@ -675,7 +678,8 @@ Ext.onReady(function(){
 			{name: 'POP3', mapping: "pop3"},
 			{name: 'IMAP', mapping: "imap"},
 			{name: 'WebMail', mapping: "webmail"},
-			{name: 'cPanel', mapping: "cpanel"}
+			{name: 'cPanel', mapping: "cpanel"},
+			{name: 'DirectAdmin', mapping: "da"}
 		]
 	});
 
@@ -704,6 +708,10 @@ Ext.onReady(function(){
 			},
 			{header: 'cPanel', width: 150, renderer: function(value) {
 					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(5)">' + value + '</a>';
+				}
+			},
+			{header: 'DirectAdmin', width: 150, renderer: function(value) {
+					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(6)">' + value + '</a>';
 				}
 			}
 		],
