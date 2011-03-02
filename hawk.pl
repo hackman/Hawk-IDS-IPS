@@ -1,7 +1,7 @@
 #!/usr/bin/perl -T
-# 1H - Hawk IDS/IPS                                 Copyright(c) 2010 1H Ltd
-#                                                        All rights Reserved
-# copyright@1h.com                                             http://1h.com
+# 1H - Hawk IDS/IPS								 Copyright(c) 2010 1H Ltd
+#														All rights Reserved
+# copyright@1h.com											 http://1h.com
 # This code is subject to the GPLv2 license. 
 #
 # This program is free software; you can redistribute it and/or modify
@@ -25,8 +25,8 @@ use parse_config;
 $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
-$ENV{PATH} = '';        # remove unsecure path
-my $VERSION = '5.1.7';
+$ENV{PATH} = '';		# remove unsecure path
+my $VERSION = '5.2.0';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -210,8 +210,8 @@ sub courier_broot {
 	$ip =~ s/.*://;
 	chomp ($user, $ip);
 
-    # return ip, number of failed attempts, service under attack, failed username
-    # this is later stored to the failed_log table via store_to_db
+	# return ip, number of failed attempts, service under attack, failed username
+	# this is later stored to the failed_log table via store_to_db
 	return ($ip, $attempts, $current_service, $user);
 }
 
@@ -310,6 +310,17 @@ sub cpanel_webmail_broot {
 	return ($cpanel[0], 1, $service, $cpanel[2]);
 }
 
+sub da_broot {
+    #87.118.135.130=attempts=7&date=1299076385&username=turba
+    #87.118.135.130=attempts=2&date=1299076492&username=admin
+	$_ =~ s/&/=/g;	# Convert all & to = so we can easily parse them
+	my @brute_log = split /=/, $_;
+
+	# return ip, number of failed attempts, service under attack, failed username
+	# this is later stored to the failed_log table via store_to_db
+	return ($brute_log[0], $brute_log[2], 6, $brute_log[7]);
+}
+
 # This is the main function which calls all other functions
 # The entire logic is stored here
 sub main {
@@ -403,7 +414,7 @@ sub main {
 		# $block_results[3] - the username that failed to authenticate to the given service
 		my @block_results = undef;
 
-		if ($config{'watch_ssh'}) {
+		if (defined($config{'watch_ssh'}) && $config{'watch_ssh'}) {
 			if ( $_ =~ /sshd\[[0-9].+\]:/) {
 				next if ($_ !~ /Failed \w \w/ && $_ !~ /authentication failure/ && $_ !~ /Invalid user/i && $_ !~ /Bad protocol/); # This looks like sshd attack
 				logger ("calling ssh_broot") if ($debug);
@@ -411,21 +422,32 @@ sub main {
 			}
 		}
 
-		if ($config{'watch_cpanel'}) {
+		if (defined($config{'watch_cpanel'}) && $config{'watch_cpanel'}) {
 			if ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) { # This looks like cPanel/Webmail attack
 				logger ("calling cpanel_webmail_broot") if ($debug);
 				@block_results = cpanel_webmail_broot($_); # Pass it to the cpanel_webmail_broot parser and get the attacker's results
 			}
 		}
 
-		if ($config{'watch_pureftpd'}) {
+		if (defined($config{'watch_da'}) && $config{'watch_da'}) {
+			# 87.118.135.130=attempts=7&date=1299076385&username=turba
+			# 87.118.135.130=attempts=2&date=1299076492&username=admin
+			# 'security.log' strings are skipped since when someone is logged out from the DA panel writes down this string:
+			#   -     87.118.135.130=attempts=1&date=1299076474&username=invalid username: check security.log
+			if ($_ =~ /attempts.*date.*username/ && $_ !~ /security.log/) { # This looks like Direct admin attack
+				logger ("calling da_broot") if ($debug);
+				@block_results = da_broot($_); # Pass the line for parsing to da_broot
+			}
+		}
+
+		if (defined($config{'watch_pureftpd'}) && $config{'watch_pureftpd'}) {
 			if ($_ =~ /pure-ftpd:/ && $_ =~ /Authentication failed/) {
 				logger ("calling pureftpd_broot") if ($debug);
 				@block_results = pureftpd_broot($_);
 			}
 		}
 
-		if ($config{'watch_proftpd'}) {
+		if (defined($config{'watch_proftpd'}) && $config{'watch_proftpd'}) {
 			#Aug 27 06:43:28 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER user: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
 			#Aug 27 06:43:47 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER werethet: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
 			#Aug 27 06:45:54 tester proftpd[7449]: tester (::ffff:127.0.0.1[::ffff:127.0.0.1]) - USER jivko (Login failed): Incorrect password. 
@@ -436,14 +458,14 @@ sub main {
 			}
 		}
 
-		if ($config{'watch_dovecot'}) {
+		if (defined($config{'watch_dovecot'}) && $config{'watch_dovecot'}) {
 			if ($_ =~ /pop3-login:|imap-login:/ && $_ =~ /auth failed/) { # This looks like a pop3/imap attack.
 				logger ("calling dovecot_broot") if ($debug);
 				@block_results = dovecot_broot($_); # Pass the log line to the pop_imap_broot parser and get the attacker's details
 			}
 		}
 
-		if ($config{'watch_courier'}) {
+		if (defined($config{'watch_courier'}) && $config{'watch_courier'}) {
 			#Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
 			#Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=kur, ip=[::ffff:87.118.135.130]
 			#Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
@@ -454,8 +476,8 @@ sub main {
 			}
 	   	}
 
-		next if (@block_results < 2);
-		next if (is_local_ip(\%whitelists, $block_results[0]));
+		next if (@block_results < 2);	# Go ahead if the size of the block results is < 3
+		next if (is_local_ip(\%whitelists, $block_results[0]));	# Go ahead if this is a local ip
 	
 		# $block_results[0] - attacker's ip address
 		# $block_results[1] - number of failed attempts. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$svc}{$ip}
@@ -491,7 +513,7 @@ sub main {
 			#push(@{$svc{'as'}}, @arr); 
 			push(@{$attacked_svcs->{$block_results[2]}}, [$curr_time, $block_results[0]]);
 
-			while( my ($service, @attackers) = each %$attacked_svcs ) {
+			while (my ($service, @attackers) = each %$attacked_svcs) {
 				my %attacks = ();
 
 				for (my $i = 0; $i < @{$attackers[0]}; $i++) {
