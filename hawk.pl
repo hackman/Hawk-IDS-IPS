@@ -26,7 +26,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '5.2.1';
+my $VERSION = '5.2.2';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -194,22 +194,34 @@ sub dovecot_broot {
 }
 
 sub courier_broot {
-	#Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
-	#Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=kur, ip=[::ffff:87.118.135.130]
-	#Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
-	#Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
-	my @current_line = split /\s+/, $_;
+	# cPanel
+	#  Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
+	#  Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=test, ip=[::ffff:87.118.135.130]
+	#  Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+	#  Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+	# Plesk
+	#  Mar  7 07:08:14 plesk pop3d: IMAP connect from @ [127.0.0.1]checkmailpasswd: FAILED: testing - short names not allowed from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+	#  Mar  7 07:08:39 plesk pop3d: IMAP connect from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+	#  Mar  7 07:09:01 plesk imapd: IMAP connect from @ [127.0.0.1]checkmailpasswd: FAILED: lala - short names not allowed from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+	#  Mar  7 07:09:28 plesk imapd: IMAP connect from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+	#  Mar  7 07:17:44 plesk pop3d-ssl: IMAP connect from @ [192.168.0.133]checkmailpasswd: FAILED: lalalal - short names not allowed from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+	#  Mar  7 07:18:28 plesk pop3d-ssl: IMAP connect from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+	#  Mar  7 07:20:33 plesk imapd-ssl: IMAP connect from @ [192.168.0.133]checkmailpasswd: FAILED: akakaka - short names not allowed from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+	#  Mar  7 07:20:53 plesk imapd-ssl: IMAP connect from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+
+	chomp($_);
 	my $current_service = 3; # The default service id is 3 -> imap
-	$current_service = 2 if ($current_line[4] =~ /pop3d(-ssl)?:/); # Service is now 2 -> pop3
-	my $user = $_;
-	my $ip = $_;
+	$current_service = 2 if ($_ =~ /pop3d(-ssl)?:/); # Service is now 2 -> pop3
+	my $user = 'unknown';
+	my $ip = '';
 	my $attempts = 1;
 
-	$user =~ s/user=(.*),/$1/;
-	$ip =~ s/ip=\[(.*)\]/$1/;
+	# Get the user if available
+	$user = $1 if ($_ =~ /user=(.*),/);
+	$user = $1 if ($_ =~ /checkmailpasswd: FAILED: (.*) -/);
+	# Parse the IP
+	$ip = $1 if ($_ =~ /ip=\[(.*)\]/);
 	$ip =~ s/.*://;
-	chomp ($user, $ip);
-
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
 	return ($ip, $attempts, $current_service, $user);
@@ -468,10 +480,20 @@ sub main {
 		}
 
 		if (defined($config{'watch_courier'}) && $config{'watch_courier'}) {
-			#Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
-			#Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=kur, ip=[::ffff:87.118.135.130]
-			#Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
-			#Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+			# cPanel
+			#  Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
+			#  Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=test, ip=[::ffff:87.118.135.130]
+			#  Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+			#  Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+			# Plesk
+			#  Mar  7 07:08:14 plesk pop3d: IMAP connect from @ [127.0.0.1]checkmailpasswd: FAILED: testing - short names not allowed from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+			#  Mar  7 07:08:39 plesk pop3d: IMAP connect from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+			#  Mar  7 07:09:01 plesk imapd: IMAP connect from @ [127.0.0.1]checkmailpasswd: FAILED: lala - short names not allowed from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+			#  Mar  7 07:09:28 plesk imapd: IMAP connect from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+			#  Mar  7 07:17:44 plesk pop3d-ssl: IMAP connect from @ [192.168.0.133]checkmailpasswd: FAILED: lalalal - short names not allowed from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+			#  Mar  7 07:18:28 plesk pop3d-ssl: IMAP connect from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+			#  Mar  7 07:20:33 plesk imapd-ssl: IMAP connect from @ [192.168.0.133]checkmailpasswd: FAILED: akakaka - short names not allowed from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+			#  Mar  7 07:20:53 plesk imapd-ssl: IMAP connect from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
 			if ($_ =~ /pop3d(-ssl)?:|imapd(-ssl?):/ && $_ =~ /FAILED/) {
 				logger ("calling courier_broot") if ($debug);
 				@block_results = courier_broot($_);

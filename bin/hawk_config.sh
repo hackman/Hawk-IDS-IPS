@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.1.2'
+VERSION='0.1.3'
 
 for ip in $(ip -4 -oneline addr list | sed 's/\/[0-9]\{1,2\}//' | awk '{print $4}'); do
 	hawk_whitelist="$ip,$hawk_whitelist"
@@ -20,7 +20,7 @@ if [ -f /var/cpanel/cpanel.config ]; then
 else
 	if [ -f /etc/init.d/dovecot ]; then
 		mailserver='dovecot'
-	elif [ -f /etc/init.d/courier-imap ] && [ -f /etc/init.d/courier-authlib ]; then
+	elif [ -f /etc/init.d/courier-imap ]; then
 		mailserver='courier'
 	fi
 fi
