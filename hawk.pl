@@ -26,7 +26,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '5.2.0';
+my $VERSION = '5.2.1';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -187,7 +187,7 @@ sub dovecot_broot {
 	my $ip = $1 if ($_ =~ /^.* rip=([0-9.]+),.*$/);
 	my $attempts = $1 if ($_ =~ /^.* ([0-9]+) attempts\).*$/);
 	chomp ($user, $ip, $attempts);
-	logger("Returning User: $user IP: $ip Attempts $attempts");
+	logger("Returning User: $user IP: $ip Attempts $attempts") if ($debug);
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
 	return ($ip, $attempts, $current_service, $user);
@@ -291,7 +291,7 @@ sub proftpd_broot {
 	my $user = $1 if ($_ =~ / - USER (\w+)/);
 	my $ip = $1 if ($_ =~ /\(.*\[(.*)\]\)/);
 	$ip =~ s/.*://g;
-	logger("Returning: $ip, 1, 0, $user");
+	logger("Returning: $ip, 1, 0, $user") if ($debug);
 	return ($ip, 1, 0, $user);
 }
 
@@ -313,12 +313,14 @@ sub cpanel_webmail_broot {
 sub da_broot {
     #87.118.135.130=attempts=7&date=1299076385&username=turba
     #87.118.135.130=attempts=2&date=1299076492&username=admin
+	$_ =~ s/(\r|\n)//g;
 	$_ =~ s/&/=/g;	# Convert all & to = so we can easily parse them
 	my @brute_log = split /=/, $_;
+	logger("IP: $brute_log[0], Failed: $brute_log[2], SVC: 6, User: $brute_log[6]") if ($debug);
 
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
-	return ($brute_log[0], $brute_log[2], 6, $brute_log[7]);
+	return ($brute_log[0], $brute_log[2], 6, $brute_log[6]);
 }
 
 # This is the main function which calls all other functions
@@ -554,15 +556,15 @@ sub main {
 	}
 	
 	# We should never hit those unless we kill tail :)
-	logger("Gone ...after the main loop");
+	logger("Gone ... after the main loop");
 	close LOGS;
-	logger("Gone ...after we closed the logs");
+	logger("Gone ... after we closed the logs");
 	close STDIN;
-	logger("Gone ...after we closed the stdin");
+	logger("Gone ... after we closed the stdin");
 	close STDOUT;
-	logger("Gone ...after we closed the stdout");
+	logger("Gone ... after we closed the stdout");
 	close STDERR;
-	logger("Gone ...after we closed the stderr");
+	logger("Gone ... after we closed the stderr");
 	close HAWKLOG;
 	exit 0;
 }

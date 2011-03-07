@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.1.1'
+VERSION='0.1.2'
 
 for ip in $(ip -4 -oneline addr list | sed 's/\/[0-9]\{1,2\}//' | awk '{print $4}'); do
 	hawk_whitelist="$ip,$hawk_whitelist"
@@ -108,6 +108,7 @@ if [ -x '/etc/init.d/directadmin' ]; then
 	# Just monitor this log as it constantly appears and disappears.
 	# Tail follow option defined in the daemon will handle that for us
 	hawk_logs="$hawk_logs /usr/local/directadmin/data/admin/login.hist"
+	sed -i '/watch_da/s/=.*/=1/' /home/1h/etc/hawk.conf
 fi
 
 if [ -z "$hawk_logs" ]; then
