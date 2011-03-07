@@ -311,8 +311,8 @@ sub cpanel_webmail_broot {
 }
 
 sub da_broot {
-    #87.118.135.130=attempts=7&date=1299076385&username=turba
-    #87.118.135.130=attempts=2&date=1299076492&username=admin
+	#87.118.135.130=attempts=7&date=1299076385&username=turba
+	#87.118.135.130=attempts=2&date=1299076492&username=admin
 	$_ =~ s/(\r|\n)//g;
 	$_ =~ s/&/=/g;	# Convert all & to = so we can easily parse them
 	my @brute_log = split /=/, $_;
@@ -435,7 +435,7 @@ sub main {
 			# 87.118.135.130=attempts=7&date=1299076385&username=turba
 			# 87.118.135.130=attempts=2&date=1299076492&username=admin
 			# 'security.log' strings are skipped since when someone is logged out from the DA panel writes down this string:
-			#   -     87.118.135.130=attempts=1&date=1299076474&username=invalid username: check security.log
+			#   - 87.118.135.130=attempts=1&date=1299076474&username=invalid username: check security.log
 			if ($_ =~ /attempts.*date.*username/ && $_ !~ /security.log/) { # This looks like Direct admin attack
 				logger ("calling da_broot") if ($debug);
 				@block_results = da_broot($_); # Pass the line for parsing to da_broot
