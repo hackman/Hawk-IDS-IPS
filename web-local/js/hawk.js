@@ -1,6 +1,6 @@
 Ext.chart.Chart.CHART_URL = 'js/extjs/resources/charts.swf';
 
-var VERSION = '0.0.1';
+var VERSION = '0.1.0';
 
 var base_url = 'hawk.pl';
 
@@ -680,41 +680,54 @@ Ext.onReady(function(){
 			{name: 'WebMail', mapping: "webmail"},
 			{name: 'cPanel', mapping: "cpanel"},
 			{name: 'DirectAdmin', mapping: "da"}
-		]
+		],
+		listeners: {
+			load: function (bruteStorage) {
+				// Bruteforce's grid column model
+				var gridCm = brute_grid.getColumnModel();
+				for (var i = 0; i < gridCm.getColumnCount(); i++) {
+					// If the value which our store return for this particular service (ssh, ftp etc.) is < 0 this means that the monitoring of this particular service is disabled
+					// in that case we just hide the column for that service from the grid
+					if (bruteStorage.getAt(0).data[gridCm.getDataIndex(i)] < 0) {
+						// Hide that service's column here now!
+						gridCm.setHidden(i, true);
+					}
+				}
+			}
+		}
 	});
 
 	var brute_grid = new Ext.grid.GridPanel({
 		store: brute_store,
-		columns: [
-			{header: 'FTP', width: 150, renderer: function(value, metaData, record, rowIndex, colIndex, store) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
-				}
-			},
-			{header: 'SSH', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(1)">' + value + '</a>';
-				}
-			},
-			{header: 'POP3', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(2)">' + value + '</a>';
-				}
-			},
-			{header: 'IMAP', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(3)">' + value + '</a>';
-				}
-			},
-			{header: 'WebMail', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(4)">' + value + '</a>';
-				}
-			},
-			{header: 'cPanel', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(5)">' + value + '</a>';
-				}
-			},
-			{header: 'DirectAdmin', width: 150, renderer: function(value) {
-					return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(6)">' + value + '</a>';
-				}
+		columns: [{
+			header: 'FTP', dataIndex: 'FTP', width: 150, renderer: function(value) {
+				return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(0)">' + value + '</a>';
 			}
-		],
+		}, {
+			header: 'SSH', dataIndex: 'SSH', width: 150, renderer: function(value) {
+				return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(1)">' + value + '</a>';
+			}
+		}, {
+			header: 'POP3', dataIndex: 'POP3', width: 150, renderer: function(value) {
+				return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(2)">' + value + '</a>';
+			}
+		}, {
+			header: 'IMAP', dataIndex: 'IMAP', width: 150, renderer: function(value) {
+				return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(3)">' + value + '</a>';
+			}
+		}, {
+			header: 'WebMail', dataIndex: 'WebMail', width: 150, renderer: function(value) {
+				return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(4)">' + value + '</a>';
+			}
+		}, {
+			header: 'cPanel', dataIndex: 'cPanel', width: 150, renderer: function(value) {
+				return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(5)">' + value + '</a>';
+			}
+		}, {	
+			header: 'DirectAdmin', dataIndex: 'DirectAdmin', width: 150, renderer: function(value) {
+				return value == 0 ? value : '<a href="javascript:void(0)" onclick="Show_Services(6)">' + value + '</a>';
+			}
+		}],
 		enableHdMenu: false,
 		width: 905,
 		height: 70,
