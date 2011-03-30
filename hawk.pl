@@ -26,7 +26,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '5.2.2';
+my $VERSION = '5.2.3';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -473,7 +473,8 @@ sub main {
 		}
 
 		if (defined($config{'watch_dovecot'}) && $config{'watch_dovecot'}) {
-			if ($_ =~ /pop3-login:|imap-login:/ && $_ =~ /auth failed/) { # This looks like a pop3/imap attack.
+			# Make sure to skip lines that say "Internal login failure". This is internal processing error inside the daemon itself and should not be considered as attack
+			if ($_ =~ /pop3-login:|imap-login:/ && $_ =~ /auth failed/ && $_ !~ /Internal/) { # This looks like a pop3/imap attack.
 				logger ("calling dovecot_broot") if ($debug);
 				@block_results = dovecot_broot($_); # Pass the log line to the pop_imap_broot parser and get the attacker's details
 			}
