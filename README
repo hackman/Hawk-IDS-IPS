@@ -1,0 +1,17 @@
+Hawk is a lightweight log analyzer which was designed to be fast and efficient.
+
+It scans log files on the fly and bans IP that makes too many password failures. 
+It adds iptables rules to reject the IP addresses. 
+You can define the logfiles.
+
+What makes Hawk better then the other solutions out there is its unique Web Interface and its flexibility.
+
+Hawk currently supports:
+  sshd
+  dovecot
+  courier
+  pure-ftpd
+  proftpd
+  cPanel
+  DirectAdmin
+
