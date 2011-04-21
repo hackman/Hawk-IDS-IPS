@@ -11,8 +11,9 @@ config = {
 
 var CommonWin = new Ext.Window({
 	width:800,
-	//height:400,
-	autoHeight: true,
+	height:window.innerHeight*0.75,
+	//autoScroll: true,
+	//autoHeight: true,
 	shadow: true,
 	resizable: false,
 	closeAction: 'hide',
@@ -88,12 +89,6 @@ function Show_Brutes() {
 		viewConfig: { forceFit: true },
 		loadMask: true,
 		layout: 'fit',
-		style: {
-			'margin-top': '10px',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
-			'margin-bottom': '10px'
-		},
 		bbar: {
 			xtype: 'paging',
 			id: 'pager',
@@ -163,12 +158,6 @@ function Show_Failed() {
 		layout: 'fit',
 		viewConfig: { forceFit: true },
 		loadMask: true,
-		style: {
-			'margin-top': '10px',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
-			'margin-bottom': '10px'
-		},
 		bbar: {
 			xtype: 'paging',
 			id: 'pager',
@@ -259,12 +248,7 @@ function ShowResults(ipaddr) {
 					width: 800,
 					autoHeight: true,
 					viewConfig: { forceFit: true },
-					loadMask: true,
-					style: {
-						'margin-top': '10px',
-						'margin-left': 'auto',
-						'margin-right': 'auto'
-					}
+					loadMask: true
 				});
 
 				var charts_store = new Ext.data.JsonStore({
@@ -370,12 +354,7 @@ function Show_Services(type) {
 						height: 480,
 						layout: 'fit',
 						viewConfig: { forceFit: true },
-						loadMask: true,
-						style: {
-							'margin-top': '10px',
-							'margin-left': 'auto',
-							'margin-right': 'auto'
-						}
+						loadMask: true
 					});
 
 					CommonWin.removeAll();
@@ -444,12 +423,6 @@ function Show_IP_Details(ipaddr, interval) {
 		layout: 'fit',
 		viewConfig: { forceFit: true },
 		loadMask: true,
-		style: {
-			'margin-top': '10px',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
-			'margin-bottom': '10px'
-		},
 		bbar: {
 			xtype: 'paging',
 			id: 'pager',
@@ -529,12 +502,6 @@ function showBlocked() {
 		layout: 'fit',
 		viewConfig: { forceFit: true },
 		loadMask: true,
-		style: {
-			'margin-top': '10px',
-			'margin-left': 'auto',
-			'margin-right': 'auto',
-			'margin-bottom': '10px'
-		},
 		bbar: {
 			xtype: 'paging',
 			id: 'pager',
@@ -557,6 +524,7 @@ function goToMaster () {
 }
 
 Ext.onReady(function(){
+	console.log(window.innerWidth + " " + window.innerHeight);
 	var title_master = "";
 	if (!get_parameter("local")) {
 		title_master = "<a onclick='goToMaster();' href='javascript:void(0)'><b>Back to master interface</b></a>";
