@@ -1,0 +1,25 @@
+#!/bin/bash
+
+hawk_conf='/home/1h/etc/hawk.conf'
+
+if [ ! -f $hawk_conf ]; then
+	exit 0
+fi
+
+if ( ! grep service_ids $hawk_conf | grep da:6 ); then
+	sed -i '/service_ids/s/$/ da:6/' $hawk_conf
+fi
+
+if ( ! grep service_names $hawk_conf | grep 6:da ); then
+	sed -i '/service_names/s/$/ 6:da/' $hawk_conf
+fi
+
+if ( ! grep watch_da $hawk_conf ); then
+	if [ -x /etc/init.d/directadmin ]; then
+		echo 'watch_da=1' >> $hawk_conf
+	else
+		echo 'watch_da=0' >> $hawk_conf
+	fi
+fi
+
+exit 0

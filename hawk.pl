@@ -1,7 +1,7 @@
 #!/usr/bin/perl -T
-# 1H - Hawk IDS/IPS                                 Copyright(c) 2010 1H Ltd
-#                                                        All rights Reserved
-# copyright@1h.com                                             http://1h.com
+# 1H - Hawk IDS/IPS								 Copyright(c) 2010 1H Ltd
+#														All rights Reserved
+# copyright@1h.com											 http://1h.com
 # This code is subject to the GPLv2 license. 
 #
 # This program is free software; you can redistribute it and/or modify
@@ -12,15 +12,6 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-
-
-# TODO
-# - Add ssh case for the following line please
-# Feb  3 03:14:43 centos sshd[16132]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=83.148.93.162  user=root
-# Feb  3 03:14:44 centos sshd[16132]: Failed password for root from 83.148.93.162 port 2681 ssh2
-# Feb  3 03:14:50 centos last message repeated 2 times
-# Feb  3 03:14:50 centos sshd[16134]: Connection closed by 83.148.93.162
-# Feb  3 03:14:50 centos sshd[16132]: PAM 2 more authentication failures; logname= uid=0 euid=0 tty=ssh ruser= rhost=83.148.93.162  user=root
 
 use strict;
 use warnings;
@@ -34,8 +25,8 @@ use parse_config;
 $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
-$ENV{PATH} = '';        # remove unsecure path
-my $VERSION = '5.1.7';
+$ENV{PATH} = '';		# remove unsecure path
+my $VERSION = '5.2.4';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -196,31 +187,43 @@ sub dovecot_broot {
 	my $ip = $1 if ($_ =~ /^.* rip=([0-9.]+),.*$/);
 	my $attempts = $1 if ($_ =~ /^.* ([0-9]+) attempts\).*$/);
 	chomp ($user, $ip, $attempts);
-	logger("Returning User: $user IP: $ip Attempts $attempts");
+	logger("Returning User: $user IP: $ip Attempts $attempts") if ($debug);
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
 	return ($ip, $attempts, $current_service, $user);
 }
 
 sub courier_broot {
-	#Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
-	#Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=kur, ip=[::ffff:87.118.135.130]
-	#Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
-	#Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
-	my @current_line = split /\s+/, $_;
+	# cPanel
+	#  Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
+	#  Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=test, ip=[::ffff:87.118.135.130]
+	#  Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+	#  Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+	# Plesk
+	#  Mar  7 07:08:14 plesk pop3d: IMAP connect from @ [127.0.0.1]checkmailpasswd: FAILED: testing - short names not allowed from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+	#  Mar  7 07:08:39 plesk pop3d: IMAP connect from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+	#  Mar  7 07:09:01 plesk imapd: IMAP connect from @ [127.0.0.1]checkmailpasswd: FAILED: lala - short names not allowed from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+	#  Mar  7 07:09:28 plesk imapd: IMAP connect from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+	#  Mar  7 07:17:44 plesk pop3d-ssl: IMAP connect from @ [192.168.0.133]checkmailpasswd: FAILED: lalalal - short names not allowed from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+	#  Mar  7 07:18:28 plesk pop3d-ssl: IMAP connect from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+	#  Mar  7 07:20:33 plesk imapd-ssl: IMAP connect from @ [192.168.0.133]checkmailpasswd: FAILED: akakaka - short names not allowed from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+	#  Mar  7 07:20:53 plesk imapd-ssl: IMAP connect from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+
+	chomp($_);
 	my $current_service = 3; # The default service id is 3 -> imap
-	$current_service = 2 if ($current_line[4] =~ /pop3d(-ssl)?:/); # Service is now 2 -> pop3
-	my $user = $_;
-	my $ip = $_;
+	$current_service = 2 if ($_ =~ /pop3d(-ssl)?:/); # Service is now 2 -> pop3
+	my $user = 'unknown';
+	my $ip = '';
 	my $attempts = 1;
 
-	$user =~ s/user=(.*),/$1/;
-	$ip =~ s/ip=\[(.*)\]/$1/;
+	# Get the user if available
+	$user = $1 if ($_ =~ /user=(.*),/);
+	$user = $1 if ($_ =~ /checkmailpasswd: FAILED: (.*) -/);
+	# Parse the IP
+	$ip = $1 if ($_ =~ /ip=\[(.*)\]/);
 	$ip =~ s/.*://;
-	chomp ($user, $ip);
-
-    # return ip, number of failed attempts, service under attack, failed username
-    # this is later stored to the failed_log table via store_to_db
+	# return ip, number of failed attempts, service under attack, failed username
+	# this is later stored to the failed_log table via store_to_db
 	return ($ip, $attempts, $current_service, $user);
 }
 
@@ -300,7 +303,7 @@ sub proftpd_broot {
 	my $user = $1 if ($_ =~ / - USER (\w+)/);
 	my $ip = $1 if ($_ =~ /\(.*\[(.*)\]\)/);
 	$ip =~ s/.*://g;
-	logger("Returning: $ip, 1, 0, $user");
+	logger("Returning: $ip, 1, 0, $user") if ($debug);
 	return ($ip, 1, 0, $user);
 }
 
@@ -317,6 +320,19 @@ sub cpanel_webmail_broot {
 	# service id 4 -> webmail
 	# service id 5 -> cpanel
 	return ($cpanel[0], 1, $service, $cpanel[2]);
+}
+
+sub da_broot {
+	#87.118.135.130=attempts=7&date=1299076385&username=turba
+	#87.118.135.130=attempts=2&date=1299076492&username=admin
+	$_ =~ s/(\r|\n)//g;
+	$_ =~ s/&/=/g;	# Convert all & to = so we can easily parse them
+	my @brute_log = split /=/, $_;
+	logger("IP: $brute_log[0], Failed: $brute_log[2], SVC: 6, User: $brute_log[6]") if ($debug);
+
+	# return ip, number of failed attempts, service under attack, failed username
+	# this is later stored to the failed_log table via store_to_db
+	return ($brute_log[0], $brute_log[2], 6, $brute_log[6]);
 }
 
 # This is the main function which calls all other functions
@@ -412,7 +428,7 @@ sub main {
 		# $block_results[3] - the username that failed to authenticate to the given service
 		my @block_results = undef;
 
-		if ($config{'watch_ssh'}) {
+		if (defined($config{'watch_ssh'}) && $config{'watch_ssh'}) {
 			if ( $_ =~ /sshd\[[0-9].+\]:/) {
 				next if ($_ !~ /Failed \w \w/ && $_ !~ /authentication failure/ && $_ !~ /Invalid user/i && $_ !~ /Bad protocol/); # This looks like sshd attack
 				logger ("calling ssh_broot") if ($debug);
@@ -420,21 +436,32 @@ sub main {
 			}
 		}
 
-		if ($config{'watch_cpanel'}) {
+		if (defined($config{'watch_cpanel'}) && $config{'watch_cpanel'}) {
 			if ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) { # This looks like cPanel/Webmail attack
 				logger ("calling cpanel_webmail_broot") if ($debug);
 				@block_results = cpanel_webmail_broot($_); # Pass it to the cpanel_webmail_broot parser and get the attacker's results
 			}
 		}
 
-		if ($config{'watch_pureftpd'}) {
+		if (defined($config{'watch_da'}) && $config{'watch_da'}) {
+			# 87.118.135.130=attempts=7&date=1299076385&username=turba
+			# 87.118.135.130=attempts=2&date=1299076492&username=admin
+			# 'security.log' strings are skipped since when someone is logged out from the DA panel writes down this string:
+			#   - 87.118.135.130=attempts=1&date=1299076474&username=invalid username: check security.log
+			if ($_ =~ /attempts.*date.*username/ && $_ !~ /security.log/) { # This looks like Direct admin attack
+				logger ("calling da_broot") if ($debug);
+				@block_results = da_broot($_); # Pass the line for parsing to da_broot
+			}
+		}
+
+		if (defined($config{'watch_pureftpd'}) && $config{'watch_pureftpd'}) {
 			if ($_ =~ /pure-ftpd:/ && $_ =~ /Authentication failed/) {
 				logger ("calling pureftpd_broot") if ($debug);
 				@block_results = pureftpd_broot($_);
 			}
 		}
 
-		if ($config{'watch_proftpd'}) {
+		if (defined($config{'watch_proftpd'}) && $config{'watch_proftpd'}) {
 			#Aug 27 06:43:28 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER user: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
 			#Aug 27 06:43:47 tester proftpd[4374]: tester (::ffff:87.118.135.130[::ffff:87.118.135.130]) - USER werethet: no such user found from ::ffff:87.118.135.130 [::ffff:87.118.135.130] to ::ffff:209.62.32.14:21 
 			#Aug 27 06:45:54 tester proftpd[7449]: tester (::ffff:127.0.0.1[::ffff:127.0.0.1]) - USER jivko (Login failed): Incorrect password. 
@@ -445,26 +472,37 @@ sub main {
 			}
 		}
 
-		if ($config{'watch_dovecot'}) {
-			if ($_ =~ /pop3-login:|imap-login:/ && $_ =~ /auth failed/) { # This looks like a pop3/imap attack.
+		if (defined($config{'watch_dovecot'}) && $config{'watch_dovecot'}) {
+			# Make sure to skip lines that say "Internal login failure". This is internal processing error inside the daemon itself and should not be considered as attack
+			if ($_ =~ /pop3-login:|imap-login:/ && $_ =~ /auth failed/ && $_ !~ /Internal/) { # This looks like a pop3/imap attack.
 				logger ("calling dovecot_broot") if ($debug);
 				@block_results = dovecot_broot($_); # Pass the log line to the pop_imap_broot parser and get the attacker's details
 			}
 		}
 
-		if ($config{'watch_courier'}) {
-			#Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
-			#Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=kur, ip=[::ffff:87.118.135.130]
-			#Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
-			#Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+		if (defined($config{'watch_courier'}) && $config{'watch_courier'}) {
+			# cPanel
+			#  Aug 27 06:10:57 m670 imapd: LOGIN FAILED, user=wrelthkl, ip=[::ffff:87.118.135.130]
+			#  Aug 27 06:11:10 m670 pop3d: LOGIN FAILED, user=test, ip=[::ffff:87.118.135.130]
+			#  Aug 27 06:12:35 m670 pop3d-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+			#  Aug 27 06:13:53 m670 imapd-ssl: LOGIN FAILED, user=root:x:0:0:root:/root:/bin/bash, ip=[::ffff:87.118.135.130]
+			# Plesk
+			#  Mar  7 07:08:14 plesk pop3d: IMAP connect from @ [127.0.0.1]checkmailpasswd: FAILED: testing - short names not allowed from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+			#  Mar  7 07:08:39 plesk pop3d: IMAP connect from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+			#  Mar  7 07:09:01 plesk imapd: IMAP connect from @ [127.0.0.1]checkmailpasswd: FAILED: lala - short names not allowed from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+			#  Mar  7 07:09:28 plesk imapd: IMAP connect from @ [127.0.0.1]ERR: LOGIN FAILED, ip=[127.0.0.1]
+			#  Mar  7 07:17:44 plesk pop3d-ssl: IMAP connect from @ [192.168.0.133]checkmailpasswd: FAILED: lalalal - short names not allowed from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+			#  Mar  7 07:18:28 plesk pop3d-ssl: IMAP connect from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+			#  Mar  7 07:20:33 plesk imapd-ssl: IMAP connect from @ [192.168.0.133]checkmailpasswd: FAILED: akakaka - short names not allowed from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
+			#  Mar  7 07:20:53 plesk imapd-ssl: IMAP connect from @ [192.168.0.133]ERR: LOGIN FAILED, ip=[192.168.0.133]
 			if ($_ =~ /pop3d(-ssl)?:|imapd(-ssl?):/ && $_ =~ /FAILED/) {
 				logger ("calling courier_broot") if ($debug);
 				@block_results = courier_broot($_);
 			}
 	   	}
 
-		next if (@block_results < 2);
-		next if (is_local_ip(\%whitelists, $block_results[0]));
+		next if (@block_results < 2);	# Go ahead if the size of the block results is < 3
+		next if (is_local_ip(\%whitelists, $block_results[0]));	# Go ahead if this is a local ip
 	
 		# $block_results[0] - attacker's ip address
 		# $block_results[1] - number of failed attempts. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$svc}{$ip}
@@ -500,7 +538,7 @@ sub main {
 			#push(@{$svc{'as'}}, @arr); 
 			push(@{$attacked_svcs->{$block_results[2]}}, [$curr_time, $block_results[0]]);
 
-			while( my ($service, @attackers) = each %$attacked_svcs ) {
+			while (my ($service, @attackers) = each %$attacked_svcs) {
 				my %attacks = ();
 
 				for (my $i = 0; $i < @{$attackers[0]}; $i++) {
@@ -541,15 +579,15 @@ sub main {
 	}
 	
 	# We should never hit those unless we kill tail :)
-	logger("Gone ...after the main loop");
+	logger("Gone ... after the main loop");
 	close LOGS;
-	logger("Gone ...after we closed the logs");
+	logger("Gone ... after we closed the logs");
 	close STDIN;
-	logger("Gone ...after we closed the stdin");
+	logger("Gone ... after we closed the stdin");
 	close STDOUT;
-	logger("Gone ...after we closed the stdout");
+	logger("Gone ... after we closed the stdout");
 	close STDERR;
-	logger("Gone ...after we closed the stderr");
+	logger("Gone ... after we closed the stderr");
 	close HAWKLOG;
 	exit 0;
 }

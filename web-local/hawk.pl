@@ -1,13 +1,6 @@
 #!/usr/bin/perl
-#############################################
-#
-# Author: 
-#		Jivko Angelov <jivko@1h.com> 
-#
-# Version 0.1
-# Last update:	26.Mar.2010
-#
-#############################################
+# Author(s):
+#	Jivko Angelov <jivko@1h.com> 
 
 use strict;
 use warnings;
@@ -19,12 +12,13 @@ use POSIX qw(strftime);
 use lib '/home/1h/lib/perl';
 use parse_config;
 
-my $VERSION = '0.1.3';
+my $VERSION = '0.2.1';
+
 
 my $conf = '/home/1h/etc/hawk.conf';
 my %config = parse_config($conf);
 
-my %srvhash = split(/[: ]/, $config{'service_names'});
+my %srvhash = split(/[: ]+/, $config{'service_names'});
 
 my %interval_secs = (
 	"8hours" => '28800',
@@ -261,12 +255,16 @@ if (defined(param('id'))) {
 			while (my @data = $brutes_count->fetchrow_array) {
 				$brutes{$data[1]} = $data[0];
 			}
-			# FTP(0) SSH(1) POP3(2) IMAP(3) WebMail(4) cPanel(5)
-			my @srvs = ("ftp", "ssh", "pop3", "imap", "webmail", "cpanel");
+			# FTP(0) SSH(1) POP3(2) IMAP(3) WebMail(4) cPanel(5) da(6)
+			my @srvs = ("ftp", "ssh", "pop3", "imap", "webmail", "cpanel", "da");
 			for (my $i=0; $i<=$#srvs; $i++) {
-				#if (!defined($brutes{$srvs[$i]})) {
-				#	$brutes{$srvs[$i]} = 0
-				#}
+				# Return -1 for that particular service if it is NOT enabled for monitoring
+				$brutes{$srvs[$i]} = -1 if ($srvs[$i] eq 'ftp' && ! $config{'watch_pureftpd'} && ! $config{'watch_proftpd'});
+				$brutes{$srvs[$i]} = -1 if ($srvs[$i] eq 'ssh' && ! $config{'watch_ssh'});
+				$brutes{$srvs[$i]} = -1 if (($srvs[$i] eq 'pop3' || $srvs[$i] eq 'imap') && ! $config{'watch_dovecot'} && ! $config{'watch_courier'});
+				$brutes{$srvs[$i]} = -1 if (($srvs[$i] eq 'cpanel' || $srvs[$i] eq 'webmail') && ! $config{'watch_cpanel'});
+				$brutes{$srvs[$i]} = -1 if ($srvs[$i] eq 'da' && ! $config{'watch_da'});
+				next if (defined($brutes{$srvs[$i]} && $brutes{$srvs[$i]} == -1));
 				if (defined($brutes{$i})) {
 					$brutes{$srvs[$i]} = $brutes{$i};
 					delete $brutes{$i};

@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.1.2'
+VERSION='0.1.4'
 
 # Various paths
 syspath='/home/1h'
@@ -15,10 +15,11 @@ user="hawk_local"
 dbname="hawk"
 pass=$(head -n 5 /dev/urandom  | md5sum  | cut -d " " -f1)
 
-if ( ! /usr/local/1h/bin/dns_setup.sh ); then
-	echo "[!] Failed to setup the 1h dns zone"
-	exit 1      
-fi      
+#if ( ! /usr/local/1h/bin/dns_setup.sh ); then
+#	echo "[!] Failed to setup the 1h dns zone"
+#	exit 1      
+#fi      
+
 if ( ! /usr/local/1h/bin/add_1h_vhost.sh ); then
 	echo "[!] failed to add the 1h vhost to the httpd.conf"
 	exit 1
@@ -73,7 +74,7 @@ if ( ! chkconfig postgresql on ); then
 fi       
 
 # Test the connection here please
-if ( ! su - postgres -c "if ( ! psql -Upostgres -c 'select 1+1;' ); then exit 1; fi" ); then
+if ( ! su - postgres -c "if ( ! psql -Upostgres template1 -c 'select 1+1;' ); then exit 1; fi" ); then
     echo "Failed to test the connection to the postgresql database"
     exit 1
 fi

@@ -4,7 +4,7 @@
 # copyright@1h.com                                              http://1h.com
 # This code is subject to the 1H license. Unauthorized copying is prohibited.
 
-VERSION='0.1.0'
+VERSION='0.1.3'
 
 for ip in $(ip -4 -oneline addr list | sed 's/\/[0-9]\{1,2\}//' | awk '{print $4}'); do
 	hawk_whitelist="$ip,$hawk_whitelist"
@@ -20,7 +20,7 @@ if [ -f /var/cpanel/cpanel.config ]; then
 else
 	if [ -f /etc/init.d/dovecot ]; then
 		mailserver='dovecot'
-	elif [ -f /etc/init.d/courier-imap ] && [ -f /etc/init.d/courier-authlib ]; then
+	elif [ -f /etc/init.d/courier-imap ]; then
 		mailserver='courier'
 	fi
 fi
@@ -102,6 +102,13 @@ if [ ! -z "$ftpserver" ]; then
 		done
 		echo "hawk_ftpserver=$ftpserver"
 	fi
+fi
+
+if [ -x '/etc/init.d/directadmin' ]; then
+	# Just monitor this log as it constantly appears and disappears.
+	# Tail follow option defined in the daemon will handle that for us
+	hawk_logs="$hawk_logs /usr/local/directadmin/data/admin/login.hist"
+	sed -i '/watch_da/s/=.*/=1/' /home/1h/etc/hawk.conf
 fi
 
 if [ -z "$hawk_logs" ]; then
