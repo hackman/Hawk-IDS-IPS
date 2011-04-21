@@ -19,7 +19,7 @@ use POSIX qw(strftime);
 use lib '/home/1h/lib/perl';
 use parse_config;
 
-my $VERSION = '0.1.2';
+my $VERSION = '0.1.3';
 
 my $conf = '/home/1h/etc/hawk.conf';
 my %config = parse_config($conf);
@@ -323,6 +323,7 @@ if (defined(param('id'))) {
 		my $limit = (defined(param('limit')) && param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
 		my $offset = (defined(param('start')) && param('start') =~ /^([0-9]+)$/) ? $1 : 0;
 		my %result;
+		$result{'data'} = [];
 		$result{'total'} = $conn->selectrow_array($brutes_24h_count);
 		$brutes_24h->execute($offset, $limit) or web_error("Unable to get brutes 24h from database: $DBI::errstr");
 		while (my @data = $brutes_24h->fetchrow_array) {
@@ -336,6 +337,7 @@ if (defined(param('id'))) {
 		my $limit = (defined(param('limit')) && param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
 		my $offset = (defined(param('start')) && param('start') =~ /^([0-9]+)$/) ? $1 : 0;
 		my %result;
+		$result{'data'} = [];
 		$result{'total'} = $conn->selectrow_array($failed_24h_count);
 		$failed_24h->execute($offset, $limit) or web_error("Unable to get failed 24h from database: $DBI::errstr");
 		while (my @data = $failed_24h->fetchrow_array) {
@@ -409,6 +411,7 @@ if (defined(param('id'))) {
 			my $limit = (defined(param('limit')) && param('limit') =~ /^([0-9]+)$/) ? $1 : 20;
 			my $offset = (defined(param('start')) && param('start') =~ /^([0-9]+)$/) ? $1 : 0;
 			my %result;
+			$result{'data'} = [];
 			$result{'total'} = $conn->selectrow_array(sprintf($failed_ip_query_count, $interval), undef, $ip);
 			my $failed_ip = $conn->prepare(sprintf($failed_ip_query, $interval));
 			$failed_ip->execute($ip, $offset, $limit) or web_error("Unable to get failed ip from database: $DBI::errstr");
