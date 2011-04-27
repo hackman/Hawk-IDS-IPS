@@ -12,7 +12,7 @@ use POSIX qw(strftime);
 use lib '/home/1h/lib/perl';
 use parse_config;
 
-my $VERSION = '0.2.1';
+my $VERSION = '0.2.2';
 
 
 my $conf = '/home/1h/etc/hawk.conf';
@@ -359,7 +359,7 @@ if (defined(param('id'))) {
 			print $json->encode(\@result);
 		}
 	} elsif ($id == 7) {
-		my $ip = validate_ip(param('ip'));
+		my $ip = validate_ip(scalar(param('ip')));
 		web_error("No or invalid IP supplied!") if (!defined($ip));
 		my $charts_24h_broots = $conn->prepare(sprintf($search_charts_query, "broots"));
 		$charts_24h_broots->execute($ip) or web_error("Unable to get chart info from database: $DBI::errstr");
