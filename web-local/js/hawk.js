@@ -1,6 +1,6 @@
 Ext.chart.Chart.CHART_URL = 'js/extjs/resources/charts.swf';
 
-var VERSION = '0.1.0';
+var VERSION = '0.1.1';
 
 var base_url = 'hawk.pl';
 
@@ -11,7 +11,7 @@ config = {
 
 var CommonWin = new Ext.Window({
 	width:800,
-	height:window.innerHeight*0.75,
+	height:pageHeight()*0.75,
 	//autoScroll: true,
 	//autoHeight: true,
 	shadow: true,
@@ -21,6 +21,21 @@ var CommonWin = new Ext.Window({
 	layout: 'fit',
 	bbar: {}
 });
+
+function pageHeight() {
+	var w = 0;
+	if ( window.innerHeight != null )
+		w = window.innerHeight
+	else
+		if ( document.documentElement && document.documentElement.clientHeight )
+			w = document.documentElement.clientHeight;
+		else
+			if ( document.body != null )
+				w = document.body.clientHeight;
+			else
+				w = null;
+	return w;
+}
 
 function get_parameter(name) {
 	name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
@@ -524,7 +539,6 @@ function goToMaster () {
 }
 
 Ext.onReady(function(){
-	console.log(window.innerWidth + " " + window.innerHeight);
 	var title_master = "";
 	if (!get_parameter("local")) {
 		title_master = "<a onclick='goToMaster();' href='javascript:void(0)'><b>Back to master interface</b></a>";
