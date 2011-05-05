@@ -26,7 +26,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '5.2.5';
+my $VERSION = '5.2.6';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;

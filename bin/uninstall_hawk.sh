@@ -71,6 +71,8 @@ if [ -f /usr/local/1h/etc/guardian.conf ]; then
 	sed -i "/^check_services=/s/hawk//g" /usr/local/1h/etc/guardian.conf
 	warn_err $? "Could not exclude hawk from guardian check_services"
 	sed -i "/^check_services=/s/,,/,/g" /usr/local/1h/etc/guardian.conf
+	sed -i "/^check_services/s/=,/=/g" /usr/local/1h/etc/guardian.conf
+	sed -i "/^check_services=/s/,$//g" /usr/local/1h/etc/guardian.conf
 
 	/etc/init.d/guardian restart
 	warn_err $? "Could not restart guardian"
