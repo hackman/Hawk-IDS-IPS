@@ -49,7 +49,7 @@ our $add_stats = $local->prepare("
 	INSERT INTO \"system\".hawk_stats
 	( server, brutes0, brutes1, brutes2, failed0, failed1, failed2 ) 
 	VALUES ( ?, ?, ?, ?, ?, ?, ? )");
-our $servers = $local->prepare("SELECT \"server\",\"ip\" FROM \"system\".sitecur ORDER BY server ASC") or die("Unable to prepare list query: $DBI::errstr\n");
+our $servers = $local->prepare("SELECT \"server\",\"ip\" FROM \"servers\".list ORDER BY server ASC") or die("Unable to prepare list query: $DBI::errstr\n");
 
 sub get_info {
 	my $out = '';
