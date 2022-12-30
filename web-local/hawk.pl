@@ -9,13 +9,13 @@ use JSON::XS;
 use CGI qw/:standard/;
 use POSIX qw(strftime);
 
-use lib '/home/1h/lib/perl';
+use lib '/var/lib/hawk/lib/';
 use parse_config;
 
 my $VERSION = '0.2.2';
 
 
-my $conf = '/home/1h/etc/hawk.conf';
+my $conf = '/etc/hawk-web.conf';
 my %config = parse_config($conf);
 
 my %srvhash = split(/[: ]+/, $config{'service_names'});
