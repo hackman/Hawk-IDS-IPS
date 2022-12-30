@@ -41,9 +41,9 @@ else
 fi
 
 # Create the DB only if does not exist already
-if su - postgres -c "psql -t -Upostgres -c '\l'|grep -q $dbname"; then
+if su - postgres -c "psql -t -Upostgres -l|grep -q $dbname"; then
 	# make sure that this user is owning the DB
-	info=($(su - postgres -c "psql -t -F ' ' -q -A -Upostgres -t -c '\l'"|awk "\$1~/^$dbname$/{print \$1,\$2}"))
+	info=($(su - postgres -c "psql -t -F ' ' -q -A -Upostgres -t -l"|awk "\$1~/^$dbname$/{print \$1,\$2}"))
 	if [[ ${info[0]} == $dbname ]] then
 		if [[ ${info[1]} != $user ]]; then
 			su - postgres -c "psql -c \"ALTER DATABASE $dbname OWNER TO $user\""
