@@ -643,7 +643,7 @@ The output from the logs is monitored for predefined patterns and later passed t
 
 Currently [Hawk] is capable of detecting and blocking bruteforce attempts against the following services:
 
-	- ftp - PureFTPD support only
+	- ftp - PureFTPD and ProFTPd
 
 	- ssh - OpenSSH support only
 
@@ -651,9 +651,13 @@ Currently [Hawk] is capable of detecting and blocking bruteforce attempts agains
 
 	- imap - Dovecot support only
 
+	- smtp - Postfix
+
 	- cPanel
 
 	- cPanel webmail
+
+	- DirectAdmin
 
 	- more to come soon ... :)
 
@@ -681,7 +685,7 @@ In case of too many failed login attempts from a single IP address for certain p
 
 	- MONITOR THE LOGS
 
-	- pop_imap_broot(), ssh_broot(), ftp_broot(), cpanel_webmail_broot() - In case of hack attempt match the control is passed to line parser for the given service.
+	- pop_imap_broot(), ssh_broot(), ftp_broot(), cpanel_webmail_broot() - In case of hack attempt match, the control is passed to line parser for the given service.
 
 	- is_local_ip() - Make sure that the IP of the attacker is not the local IP. We do not want to block localhosts.
 
@@ -811,7 +815,7 @@ In case of too many failed login attempts from a single IP address for certain p
 
 	Output:
 		0 if $ip_failed_count < $max_attempts
-		1 if $ip_failed_count >= $max_attempts -> This means store this IP to the broots db and later block it with iptables via the cron
+		1 if $ip_failed_count >= $max_attempts -> This means, store this IP to the broots db and later block it with iptables via the cron
 
 =head2 pop_imap_broot() ssh_broot() ftp_broot() cpanel_webmail_broot() - The logs output parsers for the supported services
 
@@ -825,8 +829,10 @@ In case of too many failed login attempts from a single IP address for certain p
 			1 - SSH
 			2 - POP3
 			3 - IMAP
-			4 - WebMai
+			4 - WebMail
 			5 - cPanel
+			6 - DirectAdmin
+			7 - Postfix
 		$username - The username that failed to authenticate from that IP
 
 =head2 main() - NO HELP AVAIL :)
@@ -865,7 +871,11 @@ In case of too many failed login attempts from a single IP address for certain p
 
 =head1 COPYRIGHT
 
-	FILL ME
+	Marian Marinov <mm@yuhu.biz>, 
+	Jivko Angelov <jivko@siteground.com>, 
+	Valentin Chernozemski <valentin@siteground.com>
+
+	License GPLv2
 
 =head1 SEE ALSO
 
