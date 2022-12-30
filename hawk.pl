@@ -91,8 +91,8 @@ sub sigChld {
 	}
 }
 
-# Store each attacker attempt to the database if $_[0] is 0
-# Store the attacker's ip to the brootforce database if $_[0] 1
+# If $_[3] is 0, store the failed login attempt to the DB
+# If $_[3] is 1, store the bruteforce attempt to the DB
 # The brootforce table is later checked by the cron
 sub store_to_db {
 	# $_[0] DB name
@@ -609,7 +609,7 @@ main();
 
 =head1 NAME
 
-hawk.pl - SiteGround Commercial bruteforce monitoring detection and prevention daemon. 
+hawk.pl - Hawk Open Source IDS/IPS 
 
 =head1 SYNOPSIS
 
