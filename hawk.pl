@@ -17,14 +17,14 @@ use warnings;
 use DBD::Pg;
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
 
-use lib '/var/lib/hawk/perl/';
+use lib '/var/lib/hawk/lib/';
 use parse_config;
 
 $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '5.2.6';
+my $VERSION = '6.00';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
