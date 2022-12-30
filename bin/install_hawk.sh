@@ -12,6 +12,7 @@ db="$syspath/db/hawk.sql"
 user="hawk_local"
 dbname="hawk"
 pass=$(head -n 5 /dev/urandom  | md5sum  | cut -d " " -f1)
+pgsql_data=/var/lib/pgsql/data
 
 if ( ! /var/lib/hawk/bin/hawk_config.sh ); then
 	echo "[!] hawk_config.sh failed"
@@ -120,18 +121,6 @@ if [ ! -f /var/spool/cron/root ] || ( ! grep hawk-unblock.sh /var/spool/cron/roo
         echo "[!] Failed to add hawk-unblock.sh to the root cron"
         exit 1
     fi
-	if [ -d /usr/local/1h/lib/guardian/svcstop ]; then
-		touch /usr/local/1h/lib/guardian/svcstop/crond
-	fi
-	if ( ! /etc/init.d/crond restart ); then
-		echo "/etc/init.d/crond restart failed"
-		exit 1
-	fi
-	rm -f /usr/local/1h/lib/guardian/svcstop/crond
-fi
-
-if [ -d /usr/local/1h/lib/guardian/svcstop ]; then
-	touch /usr/local/1h/lib/guardian/svcstop/crond
 fi
 
 if [ -x /etc/init.d/crond ] && ( ! /etc/init.d/crond restart ); then
@@ -139,14 +128,12 @@ if [ -x /etc/init.d/crond ] && ( ! /etc/init.d/crond restart ); then
 	exit 1
 fi
 
-rm -f /usr/local/1h/lib/guardian/svcstop/crond
-
-if [ ! -f /var/lib/pgsql/data/pg_hba.conf ]; then
-    echo "/var/lib/pgsql/data/pg_hba.conf is missing"
+if [ ! -f $pgsql_data/pg_hba.conf ]; then
+    echo "$pgsql_data/pg_hba.conf is missing"
     exit 1
 fi
 
-if ( ! cat /var/lib/pgsql/data/pg_hba.conf | grep -v ^$ | grep -v '\#' | awk '{print $3}' | grep ^$user$ ); then
+if ( ! cat $pgsql_data/pg_hba.conf | grep -v ^$ | grep -v '\#' | awk '{print $3}' | grep ^$user$ ); then
     psql_conf="local $dbname $user md5\nhost $dbname $user 127.0.0.1 255.255.255.255 md5"
     if ( ! sed -i "1i$psql_conf" /var/lib/pgsql/data/pg_hba.conf ); then
         echo "[!] Failed to add the new psql config options to /var/lib/pgsql/data/pg_hba.conf"
@@ -181,15 +168,9 @@ if ( ! chkconfig hawk on ); then
     exit 1
 fi
 
-if [ -d /usr/local/1h/lib/guardian/svcstop ]; then
-	touch /usr/local/1h/lib/guardian/svcstop/hawk
-fi
-
 if ( ! /etc/init.d/hawk restart ); then
    echo "/etc/init.d/hawk restart FAILED"
    exit 1
 fi
-
-rm -rf /usr/local/1h/lib/guardian/svcstop/hawk
 
 exit 0
