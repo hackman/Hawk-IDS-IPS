@@ -24,7 +24,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '6.1';
+my $VERSION = '6.2';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -333,6 +333,14 @@ sub da_broot {
 	return ($brute_log[0], $brute_log[2], 6, $brute_log[6]);
 }
 
+sub postfix_broot {
+	#Dec 30 09:04:16 BlackPearl postfix/smtpd[14147]: warning: unknown[46.148.40.150]: SASL LOGIN authentication failed: UGFzc3dvcmQ6
+	if ($_ =~ /\[([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\]: /) {
+		logger("IP: , Failed: , SVC: 7, User: N/A") if ($debug);
+		return ($1, 1, 7, 'unknown');
+	}
+}
+
 # This is the main function which calls all other functions
 # The entire logic is stored here
 sub main {
@@ -482,6 +490,16 @@ sub main {
 			if ($_ =~ /proftpd\[[0-9]+\]:/ && $_ =~ /no such user|Incorrect password/) {
 				logger ("calling proftpd_broot") if ($debug);
 				@block_results = proftpd_broot($_);
+			}
+		}
+
+		if (defined($config{'watch_postfix'}) && $config{'watch_postfix'}) {
+			#Dec 30 09:03:59 BlackPearl postfix/smtpd[14147]: warning: unknown[46.148.40.150]: SASL LOGIN authentication failed: UGFzc3dvcmQ6
+			#Dec 30 08:56:20 BlackPearl postfix/submission/smtpd[14176]: Anonymous TLS connection established from unknown[45.128.36.154]: TLSv1.2 with cipher DHE-RSA-AES256-GCM-SHA384 (256/256 bits)
+
+			if ($_ =~ /postfix\/s/ && $_ =~ /SASL LOGIN authentication failed|Anonymous TLS connection established from/ && $_ !~ /Connection lost/) {
+				logger ("calling postfix_broot") if ($debug);
+				@block_results = postfix_broot($_);
 			}
 		}
 
