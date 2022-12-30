@@ -24,7 +24,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '6.2';
+my $VERSION = '6.3';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -336,7 +336,7 @@ sub da_broot {
 sub postfix_broot {
 	#Dec 30 09:04:16 BlackPearl postfix/smtpd[14147]: warning: unknown[46.148.40.150]: SASL LOGIN authentication failed: UGFzc3dvcmQ6
 	if ($_ =~ /\[([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\]: /) {
-		logger("IP: , Failed: , SVC: 7, User: N/A") if ($debug);
+		logger("IP: $1, Failed: 1, SVC: 7, User: N/A") if ($debug);
 		return ($1, 1, 7, 'unknown');
 	}
 }
