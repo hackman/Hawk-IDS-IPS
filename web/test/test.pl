@@ -42,7 +42,7 @@ my $big_json = {
 				{hour=>'06:00', brutes=>int(rand($rand_to - $rand_from)) + $rand_from, failed=>int(rand($rand_to - $rand_from)) + $rand_from, blocked=>int(rand($rand_to - $rand_from)) + $rand_from},
 				{hour=>'07:00', brutes=>int(rand($rand_to - $rand_from)) + $rand_from, failed=>int(rand($rand_to - $rand_from)) + $rand_from, blocked=>int(rand($rand_to - $rand_from)) + $rand_from}
 			],
-			name=> 'siteground' . int(rand(200)) . '.com',
+			name=> 'hawk' . int(rand(20)) . '.1h.cx',
 		},
 		{
 			num=> '2',
@@ -72,7 +72,7 @@ my $big_json = {
 				{hour=>'06:00', brutes=>int(rand($rand_to - $rand_from)) + $rand_from, failed=>int(rand($rand_to - $rand_from)) + $rand_from, blocked=>int(rand($rand_to - $rand_from)) + $rand_from},
 				{hour=>'07:00', brutes=>int(rand($rand_to - $rand_from)) + $rand_from, failed=>int(rand($rand_to - $rand_from)) + $rand_from, blocked=>int(rand($rand_to - $rand_from)) + $rand_from}
 			],
-			name=> 'siteground' . int(rand(200)) . '.com',
+			name=> 'hawk' . int(rand(20)) . '.1h.cx',
 		},
 		{
 			num=> '3',
@@ -102,7 +102,7 @@ my $big_json = {
 				{hour=>'06:00', brutes=>int(rand($rand_to - $rand_from)) + $rand_from, failed=>int(rand($rand_to - $rand_from)) + $rand_from, blocked=>int(rand($rand_to - $rand_from)) + $rand_from},
 				{hour=>'07:00', brutes=>int(rand($rand_to - $rand_from)) + $rand_from, failed=>int(rand($rand_to - $rand_from)) + $rand_from, blocked=>int(rand($rand_to - $rand_from)) + $rand_from}
 			],
-			name=> 'siteground' . int(rand(200)) . '.com',
+			name=> 'hawk' . int(rand(20)) . '.1h.cx',
 		},
 		{
 			num=> '4',
@@ -132,7 +132,7 @@ my $big_json = {
 				{hour=>'06:00', brutes=>int(rand($rand_to - $rand_from)) + $rand_from, failed=>int(rand($rand_to - $rand_from)) + $rand_from, blocked=>int(rand($rand_to - $rand_from)) + $rand_from},
 				{hour=>'07:00', brutes=>int(rand($rand_to - $rand_from)) + $rand_from, failed=>int(rand($rand_to - $rand_from)) + $rand_from, blocked=>int(rand($rand_to - $rand_from)) + $rand_from}
 			],
-			name=> 'siteground' . int(rand(200)) . '.com',
+			name=> 'hawk' . int(rand(20)) . '.1h.cx',
 		},
 	]
 };
