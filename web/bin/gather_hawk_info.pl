@@ -4,13 +4,13 @@ use warnings;
 use DBD::Pg;
 use JSON::XS;
 
-use lib '/home/sgapi/lib';
+use lib '/var/lib/hawk/lib';
 use parse_config;
 use db_utils;
 
 my $VERSION = '0.0.2';
 
-my $config_file = '/home/sgapi/etc/web.conf';
+my $config_file = '/etc/hawk-web.conf';
 
 my %config = parse_config($config_file);
 my %admin_config = %config;
@@ -78,8 +78,6 @@ sub get_server_info {
 
 my $conn = connect_db(\%admin_config);
 
-#gather info only from 10 servers if running in debug mode
-#$server_list.=' LIMIT 10' if ($config{'debug'});
 $server_list = $conn->prepare($server_list);
 $server_list->execute() or die "Could not execute the query for server_list: $DBI::errstr";
 
