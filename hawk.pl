@@ -1,7 +1,5 @@
 #!/usr/bin/perl -T
-# 1H - Hawk IDS/IPS								 Copyright(c) 2010 1H Ltd
-#														All rights Reserved
-# copyright@1h.com											 http://1h.com
+# Hawk IDS/IPS								 Copyright(c) Marian Marinov
 # This code is subject to the GPLv2 license. 
 #
 # This program is free software; you can redistribute it and/or modify
@@ -19,7 +17,7 @@ use warnings;
 use DBD::Pg;
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
 
-use lib '/home/1h/lib/perl/';
+use lib '/var/lib/hawk/perl/';
 use parse_config;
 
 $SIG{"CHLD"} = \&sigChld;
@@ -338,7 +336,7 @@ sub da_broot {
 # This is the main function which calls all other functions
 # The entire logic is stored here
 sub main {
-	my $conf = '/home/1h/etc/hawk.conf';
+	my $conf = '/etc/hawk.conf';
 	my %config = parse_config($conf);
 
 	# Hawk files
@@ -830,7 +828,7 @@ In case of too many failed login attempts from a single IP address for certain p
 
 =head1 REPORTING BUGS
 
-	operations@1h.com
+	mm@yuhu.biz
 
 =head1 COPYRIGHT
 

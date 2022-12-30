@@ -1,7 +1,5 @@
 #!/bin/bash
-# 1H - Hawk IDS/IPS blocker script                  Copyright(c) 2010 1H Ltd
-#                                                        All rights Reserved
-# copyright@1h.com                                             http://1h.com
+# hawk-blocker.sh			Marian Marinov <mm@yuhu.biz>
 # This code is subject to the GPLv2 license. 
 #
 # This program is free software; you can redistribute it and/or modify
@@ -13,7 +11,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-hawk_conf='/home/oneh/api/etc/hawk.conf'
+hawk_conf='/etc/hawk.conf'
 dbuser=$(awk -F = '/dbuser/{print $2}' $hawk_conf)
 dbpass=$(awk -F = '/dbpass/{print $2}' $hawk_conf)
 block_list=$(awk -F = '/block_list/{print $2}' $hawk_conf)

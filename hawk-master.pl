@@ -6,12 +6,14 @@ use CGI qw(param);
 use CGI::Carp qw(fatalsToBrowser);
 use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 use File::Basename;
+use lib '/var/lib/hawk/lib';
+use parse_config;
 
 # system variables
 $ENV{PATH} = '';		# remove unsecure path
 my $version = '0.1';		# version string
 
-my $conf = '/home/sentry/hackman/hawk-web.conf';
+my $conf = '/etc/hawk-web.conf';
 # make DB vars
 my $html	= '';
 my %config;
@@ -21,31 +23,8 @@ sub web_error {
 	print $_[0], "\n";
 	exit 1;
 }
-# parse the configuration file $conf into the hash %config
-sub parse_conf {
-	my %hash;
-	die "No config defined!\n" if !defined($_[0]);
-	open CONF, '<', $_[0] or die "Unable to open $_[0]: $!\n";
-	while (<CONF>) {
-		if ($_ =~ /^#/ or $_ =~ /^[\s]*$/) {
-			# if this is a comment
-			# or blank line
-			# skip to next line
-			next;
-		} else {
-			# clean unwanted chars
-			$_ =~ s/[\r|\n]$//;
-			$_ =~ s/([\s]*=[\s]*){1}/=/;
-			my $key = my $val = $_;
-			$key =~ s/=.*//;
-			$val =~ s/.*?=//;
-			$hash{$key} = $val;
-		}
-	}
-	close CONF;
-	return %hash;
-}
-%config = parse_conf($conf);
+
+%config = parse_config($conf);
 
 sub get_template {
         my $out='';

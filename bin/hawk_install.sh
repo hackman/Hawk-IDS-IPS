@@ -1,33 +1,25 @@
 #!/bin/bash
-# 1H - hawk_install.sh		                        Copyright(c) 2010 1H Ltd.
-#                                                        All rights Reserved.
-# copyright@1h.com                                              http://1h.com
-# This code is subject to the 1H license. Unauthorized copying is prohibited.
+# hawk_install.sh		           Copyright(c) Marian Marinov <mm@yuhu.biz>
+# This code is subject to the GPLv2 license.
 
 VERSION='0.1.4'
 
 # Various paths
-syspath='/home/1h'
-conf="$syspath/etc/hawk.conf"
+syspath='/var/lib/hawk'
+conf="/etc/hawk.conf"
 db="$syspath/db/hawk.sql"
 # Define the PGSQL cpustats user and generate new password for it
 user="hawk_local"
 dbname="hawk"
 pass=$(head -n 5 /dev/urandom  | md5sum  | cut -d " " -f1)
 
-#if ( ! /usr/local/1h/bin/dns_setup.sh ); then
-#	echo "[!] Failed to setup the 1h dns zone"
-#	exit 1      
-#fi      
-
-if ( ! /usr/local/1h/bin/add_1h_vhost.sh ); then
-	echo "[!] failed to add the 1h vhost to the httpd.conf"
+if ( ! /var/lib/hawk/bin/hawk_config.sh ); then
+	echo "[!] hawk_config.sh failed"
 	exit 1
 fi
 
-if ( ! /usr/local/1h/bin/hawk_config.sh ); then
-	echo "[!] hawk_config.sh failed"
-	exit 1
+if [[ ! -d /var/log/hawk ]]; then
+	mkdir -p /var/log/hawk
 fi
 
 if [ ! -x /etc/init.d/postgresql ]; then
@@ -124,7 +116,7 @@ if [ ! -f /var/spool/cron/root ] || ( ! grep hawk-unblock.sh /var/spool/cron/roo
 	        exit 1
 	    fi
 	fi
-    if ( ! echo '*/5 * * * * /usr/local/1h/bin/hawk-unblock.sh >> /usr/local/1h/var/log/hawk-unblock.log 2>&1' >> /var/spool/cron/root ); then
+    if ( ! echo '*/5 * * * * /var/lib/hawk/bin/hawk-unblock.sh >> /var/log/hawk/unblock.log 2>&1' >> /var/spool/cron/root ); then
         echo "[!] Failed to add hawk-unblock.sh to the root cron"
         exit 1
     fi
@@ -174,8 +166,8 @@ if [ -x /usr/local/cpanel/etc/init/stopcphulkd ]; then
 	fi
 fi
 
-if ( ! /usr/local/1h/bin/lockit.sh hawk ); then
-	echo "[!] Failed to password protect the web folder with /usr/local/1h/bin/lockit.sh hawk"
+if ( ! /var/lib/hawk/bin/lockit.sh hawk ); then
+	echo "[!] Failed to password protect the web folder with /var/lib/hawk/bin/lockit.sh hawk"
 	exit 1
 fi
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # The new hawk uses new scheme for back to master interface button so we should get the new info for the last time
-if ( ! /usr/local/1h/bin/change_portal.sh ); then
-	echo "/usr/local/1h/bin/change_portal.sh failed somehow"
+if ( ! /var/lib/hawk/bin/change_portal.sh ); then
+	echo "/var/lib/hawk/bin/change_portal.sh failed somehow"
 	exit 1
 fi
 

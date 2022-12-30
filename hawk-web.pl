@@ -1,7 +1,5 @@
 #!/usr/bin/perl -T
-# 1H - Hawk IDS/IPS web interface                   Copyright(c) 2010 1H Ltd
-#                                                        All rights Reserved
-# copyright@1h.com                                             http://1h.com
+# Hawk IDS/IPS web interface                   Copyright(c) Marian Marinov <mm@yuhu.biz>
 # This code is subject to the GPLv2 license. 
 #
 # This program is free software; you can redistribute it and/or modify
@@ -21,9 +19,8 @@ use CGI::Carp qw(fatalsToBrowser);
 use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 use File::Basename;
 
-require "/home/sentry/hackman/cpustats/modules/parse_config.pm";
-
-import parse_config;
+use lib '/var/lib/hawk/lib';
+use parse_config;
 
 # system variables
 $ENV{PATH} = '';					# remove unsecure path

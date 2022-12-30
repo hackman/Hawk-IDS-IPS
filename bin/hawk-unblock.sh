@@ -1,6 +1,6 @@
 #!/bin/bash
 
-hawk_conf='/home/1h/etc/hawk.conf'
+hawk_conf='/etc/hawk.conf'
 dbuser=$(awk -F = '/dbuser/{print $2}' $hawk_conf)
 dbpass=$(awk -F = '/dbpass/{print $2}' $hawk_conf)
 block_list=$(awk -F = '/block_list/{print $2}' $hawk_conf)

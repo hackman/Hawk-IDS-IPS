@@ -1,8 +1,6 @@
 #!/bin/bash
-# 1H - Hawk uninstall                               Copyright(c) 2010 1H Ltd.
-#                                                        All rights Reserved.
-# copyright@1h.com                                              http://1h.com
-# This code is subject to the 1H license. Unauthorized copying is prohibited.
+# Hawk uninstall                               Copyright(c) Marian Marinov <mm@yuhu.biz>
+# This code is subject to the GPLv2 license.
 
 VERSION='0.0.5'
 
