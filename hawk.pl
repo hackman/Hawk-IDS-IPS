@@ -346,7 +346,6 @@ sub main {
 	$logfile = $1 if ($logfile =~ /^(.*)$/);
 	# open the hawk log so we can immediately start logging any errors or debugging prints
 	open HAWKLOG, '>>', $logfile or die "DIE: Unable to open logfile $logfile: $!\n";
-	logger("Hawk version $VERSION started!");
 	
 	my $pidfile = $config{'pidfile'};	# daemon pidfile
 	$pidfile  = $1 if ($pidfile =~ /^(.*)$/);
@@ -361,14 +360,19 @@ sub main {
 		if ($log_file_entry =~ /^(\/[0-9a-z_.\/-]+)$/) {
 			if ( -f $1 ) {
 				$monitor_list .= $1 . ' ';
+			} else {
+				logger("Notice: skipping file $1 as it does not exists on this system");
 			}
+		} else {
+			logger("Warning: file path '$log_file_entry' contains invalid chars and is skipped");
 		}
 	}
 	if ($monitor_list eq '') {
-		die("Unable to parse the monitor_list file list: $config{'monitor_list'}\n");
+		die("Error: no valid file found in monitor_list file list: $config{'monitor_list'}\n");
 	}
 	my $log_list = "/usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
 	
+	logger("Hawk version $VERSION started!");
 	# This is the lifetime of the broots hash
 	# Each $broot_time all attacker's ips will be removed from the hash
 	my $broot_time = $config{'broot_time'};
