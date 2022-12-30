@@ -45,12 +45,6 @@ our $conn	= DBI->connect_cached( $config{'db'}, $config{'dbuser'}, $config{'dbpa
 our $list = $conn->prepare("
 	SELECT TO_CHAR(\"date\", 'DD.Mon.YYYY HH24:MI'), server, brutes0, brutes1, brutes2, failed0, failed1, failed2 
 	FROM \"system\".hawk_stats ORDER BY ? DESC") or web_error("Unable to prepare list query: $DBI::errstr\n");
-# our $clear_list = $conn->prepare("DELETE FROM \"system\".hawk_stats");
-# our $add_stats = $conn->prepare("
-# 	INSERT INTO \"system\".hawk_stats
-# 	( server, brutes0, brutes1, brutes2, failed0, failed1, failed2 ) 
-# 	VALUES ( ?, ?, ?, ?, ?, ?, ? )");
-# our $servers = $conn->prepare("SELECT \"server\",\"ip\" FROM \"system\".sitecur ORDER BY server ASC") or web_error("Unable to prepare list query: $DBI::errstr\n");
 my $out = get_template('main-master');
 $out =~ s/__VER__/$version/gi;
 
