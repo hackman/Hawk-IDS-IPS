@@ -2,7 +2,7 @@
 # hawk_install.sh		           Copyright(c) Marian Marinov <mm@yuhu.biz>
 # This code is subject to the GPLv2 license.
 
-VERSION='0.1.4'
+VERSION='0.2'
 
 # Various paths
 syspath='/var/lib/hawk'
@@ -106,7 +106,8 @@ if [ ! -f $pgsql_data/pg_hba.conf ]; then
     exit 1
 fi
 
-if ( ! cat $pgsql_data/pg_hba.conf | grep -v ^$ | grep -v '\#' | awk '{print $3}' | grep ^$user$ ); then
+hba_entry=$(awk "\$0!~/^ *#|^$/&&\$1~/local/&&\$NF~/md5/&&\$2~/^$dbname$/&&\$3~/^$user$/" $pgsql_data/pg_hba.conf)
+if [[ -z $hba_entry ]]; then
     psql_conf="local $dbname $user md5\nhost $dbname $user 127.0.0.1 255.255.255.255 md5"
     if ( ! sed -i "1i$psql_conf" /var/lib/pgsql/data/pg_hba.conf ); then
         echo "[!] Failed to add the new psql config options to /var/lib/pgsql/data/pg_hba.conf"
