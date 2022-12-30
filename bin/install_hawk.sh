@@ -23,66 +23,39 @@ if [[ ! -d /var/log/hawk ]]; then
 	mkdir -p /var/log/hawk
 fi
 
-if [ ! -x /etc/init.d/postgresql ]; then
-    echo "Postgresql server is not installed or it's init script is missing ... can not continue"
-    exit 1
-fi
-
-PGDATA=/var/lib/pgsql/data
-PGMAJORVERSION=$(psql -V | head -n 1 | awk '{print $3}' | sed 's/^\([0-9]*\.[0-9]*\).*$/\1/')
-if [ -z "$PGMAJORVERSION" ]; then
-    echo "Failed to obtaion PGMAJORVERSION"
-    exit 1
-fi
-
-if ( ! pgrep postmaster ); then
-    # If postgresql is not running
-    if [ -f "$PGDATA/PG_VERSION" ] && [ -d "$PGDATA/base" ]; then
-        if [ x`cat "$PGDATA/PG_VERSION"` != x"$PGMAJORVERSION" ]; then
-            echo "An old version of the database format was found. Trying to solve that now."
-            echo "You need to upgrade the data format before using PostgreSQL."
-            exit 1
-        fi
-    else
-        echo "$PGDATA is missing. Initializing it now"
-        if ( ! /etc/init.d/postgresql initdb ); then
-            echo "/etc/init.d/postgresql initdb failed"
-            exit 1
-        fi
-    fi
-    # Start postgresql please
-    if ( ! /etc/init.d/postgresql start ); then
-        echo "/etc/init.d/postgresql start failed"
-        exit 1
-    fi
-fi
-
-if ( ! chkconfig --add postgresql ); then
-	echo "chkconfig --add postgresql FAILED"
-	exit 1      
-fi      
-if ( ! chkconfig postgresql on ); then
-	echo "chkconfig postgresql on FAILED"
-	exit 1              
-fi       
-
 # Test the connection here please
 if ( ! su - postgres -c "if ( ! psql -Upostgres template1 -c 'select 1+1;' ); then exit 1; fi" ); then
     echo "Failed to test the connection to the postgresql database"
     exit 1
 fi
 
-su - postgres -c "psql -Upostgres template1 -c \"drop database $dbname\""
-su - postgres -c "psql -Upostgres template1 -c \"drop user $user\""
-
-if ( ! su - postgres -c "psql -Upostgres -c \"CREATE USER $user PASSWORD '$pass'\" template1" ); then
-    echo "[!] Failed to create user $user"
-    exit 1
+# Create the DB user only if it does not exist already
+if su - postgres -c "if psql -t -Upostgres -c '\du'|grep -q $user; then exit 1; fi"; then
+	if ( ! su - postgres -c "psql -Upostgres -c \"CREATE USER $user PASSWORD '$pass'\" template1" ); then
+		echo "[!] Failed to create user $user"
+	    exit 1
+	fi
+else
+	# Change the password of the user, so we can update the config
+	su - postgres -c "psql -Upostgres -c \"ALTER ROLE $user WITH PASSWORD '$pass'\""
 fi
 
-if ( ! su - postgres -c "psql -Upostgres -c \"CREATE DATABASE $dbname OWNER $user\" template1" ); then
-    echo "[!] Failed to create database $dbname with owner $user"
-    exit 1
+# Create the DB only if does not exist already
+if su - postgres -c "psql -t -Upostgres -c '\l'|grep -q $dbname"; then
+	# make sure that this user is owning the DB
+	info=($(su - postgres -c "psql -t -F ' ' -q -A -Upostgres -t -c '\l'"|awk "\$1~/^$dbname$/{print \$1,\$2}"))
+	if [[ ${info[0]} == $dbname ]] then
+		if [[ ${info[1]} != $user ]]; then
+			su - postgres -c "psql -c \"ALTER DATABASE $dbname OWNER TO $user\""
+		fi
+	else
+		echo "[!] unable to validate DB name and OWNER"
+	fi
+else
+	if ( ! su - postgres -c "psql -Upostgres -c \"CREATE DATABASE $dbname OWNER $user\" template1" ); then
+	    echo "[!] Failed to create database $dbname with owner $user"
+	    exit 1
+	fi
 fi
 
 if ( ! sed -i "/^dbpass/s/=.*/=$pass/" $conf ); then
