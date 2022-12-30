@@ -24,7 +24,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '6.00';
+my $VERSION = '6.1';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -355,8 +355,19 @@ sub main {
 	# For our own convenience and so we can easily add new logs with new parsers the logs are defined in the conf
 	# The logs should be space separated
 	# If we need to monitor more logs just append them to the monitor_list conf var
-	$config{'monitor_list'} = $1 if ($config{'monitor_list'} =~ /^(.*)$/);
-	my $log_list = "/usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $config{'monitor_list'} |";
+	my $monitor_list = '';
+	my $logs_provided = $1 if ($config{'monitor_list'} =~ /^(.*)$/);
+	for my $log_file_entry(split /\s+/, $logs_provided) {
+		if ($log_file_entry =~ /^(\/[0-9a-z_.\/-]+)$/) {
+			if ( -f $1 ) {
+				$monitor_list .= $1 . ' ';
+			}
+		}
+	}
+	if ($monitor_list eq '') {
+		die("Unable to parse the monitor_list file list: $config{'monitor_list'}\n");
+	}
+	my $log_list = "/usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
 	
 	# This is the lifetime of the broots hash
 	# Each $broot_time all attacker's ips will be removed from the hash
