@@ -551,35 +551,39 @@ sub main {
 		# $block_results[1] - number of failed attempts. NOTE: This is the CURRENT number of failed attempts for that IP. The total number is stored in $hack_attempts{$svc}{$ip}
 		# $block_results[2] - each service parser return it's own unique service id which is the id of the service which is under attack
 		# $block_results[3] - the username that failed to authenticate to the given service
+		my $attacker_ip = $block_results[0];
+		my $attacker_attempts = $block_results[1];
+		my $attacked_service = $block_results[2];
+		my $username = $block_results[3];
 
 		my $curr_time = time();
 		# Store this failed attempt to the database
-		logger("Storing failed: 0, $block_results[0], $block_results[2], $block_results[3]") if ($debug);
-		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $block_results[0], $block_results[2], $block_results[3])) {
-			logger("store_to_db failed: 0, $block_results[0], $block_results[2], $block_results[3]!");
+		logger("Storing failed: 0, $attacker_ip, $attacked_service, $username") if ($debug);
+		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $attacker_ip, $attacked_service, $username)) {
+			logger("store_to_db failed: 0, $attacker_ip, $attacked_service, $username!");
 		}
 
-		$hack_attempt->{$block_results[2]}->{$block_results[0]} = get_attempts($block_results[1], $hack_attempt->{$block_results[2]}->{$block_results[0]});
-		logger("Failed attempts are $hack_attempt->{$block_results[2]}->{$block_results[0]}") if ($debug);
+		$hack_attempt->{$attacked_service}->{$attacker_ip} = get_attempts($attacker_attempts, $hack_attempt->{$attacked_service}->{$attacker_ip});
+		logger("Failed attempts are $hack_attempt->{$attacked_service}->{$attacker_ip}") if ($debug);
 
-		if ($set_limit && check_broots($hack_attempt->{$block_results[2]}->{$block_results[0]}, $config{"block_count"})) {
-			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $block_results[0], $block_results[2]);
-			if (! do_block($block_results[0], $config{'block_list'})) {
-				logger("Failed to block $block_results[0] and store it to $config{'block_list'}") if ($debug);
+		if ($set_limit && check_broots($hack_attempt->{$attacked_service}->{$attacker_ip}, $config{"block_count"})) {
+			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $attacker_ip, $attacked_service);
+			if (! do_block($attacker_ip, $config{'block_list'})) {
+				logger("Failed to block $attacker_ip and store it to $config{'block_list'}") if ($debug);
 			} else {
-				logger("Successfully blocked $block_results[0] and stored to $config{'block_list'}") if ($debug);
-				store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $block_results[0], $config{"block_count"}, "failed");
+				logger("Successfully blocked $attacker_ip and stored to $config{'block_list'}") if ($debug);
+				store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $attacker_ip, $config{"block_count"}, "failed");
 			}
-		} elsif (check_broots($hack_attempt->{$block_results[2]}->{$block_results[0]}, $config{"broot_number"})) {
+		} elsif (check_broots($hack_attempt->{$attacked_service}->{$attacker_ip}, $config{"broot_number"})) {
 			#logger("store_to_db(broots): 1, ip, service code");
-			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $block_results[0], $block_results[2]);
+			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $attacker_ip, $attacked_service);
 
 			# Zero the number of failed attempts for this IP so we can prevent adding a new brute record on attempt_to_brute+1
-			$hack_attempt->{$block_results[2]}->{$block_results[0]} = 0;
+			$hack_attempt->{$attacked_service}->{$attacker_ip} = 0;
 
 			# Push that particular bruteforce attempt to the $attacked_svcs array ref
 			#push(@{$svc{'as'}}, @arr); 
-			push(@{$attacked_svcs->{$block_results[2]}}, [$curr_time, $block_results[0]]);
+			push(@{$attacked_svcs->{$attacked_service}}, [$curr_time, $attacker_ip]);
 
 			while (my ($service, @attackers) = each %$attacked_svcs) {
 				my %attacks = ();
@@ -608,7 +612,7 @@ sub main {
 				}
 			}
 		} else {
-			logger("Not enough minerals to block $block_results[0] for bruteforcing $config{'services'}{$block_results[2]} attempts $hack_attempt->{$block_results[2]}->{$block_results[0]}") if ($debug);
+			logger("Not enough minerals to block $attacker_ip for bruteforcing $config{'services'}{$attacked_service} attempts $hack_attempt->{$attacked_service}->{$attacker_ip}") if ($debug);
 		}
 	
 		# clean all %hack_attempt entries if the $broot_time from the conf passed
