@@ -379,6 +379,16 @@ sub main {
 		die("Error: no valid file found in monitor_list file list: $config{'monitor_list'}\n");
 	}
 	my $log_list = "/usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
+
+	if ($debug) {
+		# service_ids=ftp:0 ssh:1 pop3:2 imap:3 webmail:4 cpanel:5 da:6
+		$config{'services'} = ();
+		my @services_list = split /\s+/, $config{'service_ids'};
+		for my $svc_def(split /\s+/, $config{'service_ids'}) {
+			my @svc_info = split /:/, $svc_def;
+			$config{'services'}{$svc_info[1]} = $svc_info[0];
+		}
+	}
 	
 	logger("Hawk version $VERSION started!");
 	# This is the lifetime of the broots hash
@@ -596,7 +606,7 @@ sub main {
 				}
 			}
 		} else {
-			logger("Not enough minerals to block $block_results[0] for bruteforcing $block_results[2] attempts $hack_attempt->{$block_results[2]}->{$block_results[0]}") if ($debug);
+			logger("Not enough minerals to block $block_results[0] for bruteforcing $config{'services'}{$block_results[2]} attempts $hack_attempt->{$block_results[2]}->{$block_results[0]}") if ($debug);
 		}
 	
 		# clean all %hack_attempt entries if the $broot_time from the conf passed
