@@ -11,7 +11,7 @@ if ! iptables -L INPUT -nv|grep hawk_comment; then
 fi
 
 if [[ -n $comments ]]; then
-	sed -i '/iptables_comments/s/0/1/' /etc/hawk.conf
+	sed -i '/block_comments/s/0/1/' /etc/hawk.conf
 fi
 
 # Make sure that we have our iptables chain and traffic is going trough it
