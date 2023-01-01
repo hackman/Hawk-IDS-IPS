@@ -584,9 +584,14 @@ sub main {
 			# Push that particular bruteforce attempt to the $attacked_svcs array ref
 			#push(@{$svc{'as'}}, @arr); 
 			push(@{$attacked_svcs->{$attacked_service}}, [$curr_time, $attacker_ip]);
+			# Per-service counters
+			# attacked_svcs->{service}[0] - Time of detection of the attempt
+			# attacked_svcs->{service}[1] - IP of the attacker
 
 			while (my ($service, @attackers) = each %$attacked_svcs) {
 				my %attacks = ();
+				# attacks{IP}[0] - 0 - number of bruteforce attempts per-IP
+				# attacks{IP}[1] - 1 - storred to DB
 
 				for (my $i = 0; $i < @{$attackers[0]}; $i++) {
 					# This is really old attack and we do not count it now + we delete its records
