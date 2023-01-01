@@ -24,7 +24,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '6.4';
+my $VERSION = '6.5';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -146,32 +146,21 @@ sub do_block {
 	my $blocked_ip = shift;
 	my $attempts = shift;
 	my $config_ref = shift;
+	my $cmd_ref = shift;
 	my $block_list = $config_ref->{'block_list'};
 	my $comment = "$attempts attempts";
-	my @cmd_line = ();
+	my @cmd_line = @{$cmd_ref};
+	my $ip_param = shift(@cmd_line);	# the first parameter in the array shows where the IP should be in the parameters
+
+	# For all commands, the comment is the last parameter, so add it here, if supported on this system
+	push(@cmd_line, $comment) if ($config_ref->{'block_comments'});
+
 	$block_list =~ s/(\r|\n)//g;
 	$blocked_ip = $1 if ($blocked_ip =~ /([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/) or logger ("Illegal ip content at $blocked_ip") and return 0;
 
-	if (defined($config_ref->{'block_script'}) && $config_ref->{'block_script'} ne '' && -x $config_ref->{'block_script'}) {
-		push(@cmd_line, ($config_ref->{'block_script'}, $blocked_ip, $comment));
-	} else {
-		if (defined($config_ref->{'ipset_name'}) && $config_ref->{'ipset_name'} ne '') {
-			my @cmd_line = ('/usr/sbin/ipset', 'add', $config_ref->{'ipset_name'}, $blocked_ip);
-			if (defined($config_ref->{'block_comments'}) && $config_ref->{'block_comments'}) {
-				push(@cmd_line, ('comment', $comment));
-			}
-		} else {
-			my $chain = 'in_hawk';
-			if (defined($config_ref->{'iptables_chain'}) && $config_ref->{'iptables_chain'} ne '') {
-				$chain = $config_ref->{'iptables_chain'};
-			}
-			push(@cmd_line, ('/usr/sbin/iptables', '-I', $chain, '-j', 'DROP', '-s', $blocked_ip));
-			if (defined($config_ref->{'block_comments'}) && $config_ref->{'block_comments'}) {
-				push(@cmd_line, ('-m', 'comment', '--comment', $comment));
-			}
-		}
-	}
+	$cmd_line[$ip_param] = $blocked_ip;
 	system(@cmd_line);
+
 	$block_list = $1 if ($block_list =~ /^(.*)$/);
 	open BLOCKLIST, '+>>', $block_list or "Failed to open $block_list for append: $!" and return 0;
 	print BLOCKLIST "iptables -I in_hawk -s $blocked_ip -j DROP\n" or "Failed to write to $block_list: $!" and return 0;
@@ -367,6 +356,7 @@ sub postfix_broot {
 sub main {
 	my $conf = '/etc/hawk.conf';
 	my %config = parse_config($conf);
+	my @block_cmd = ();
 
 	# Hawk files
 	my $logfile = $config{'logfile'};	# daemon logfile
@@ -410,7 +400,25 @@ sub main {
 			$config{'services'}{$svc_info[1]} = $svc_info[0];
 		}
 	}
+
+	$config{'block_comments'} = 0 if (!defined($config{'block_comments'}));
 	
+	# The first parameter of @block_cmd must be the position which has to be replaced with the IP
+	if (defined($config{'block_script'}) && $config{'block_script'} ne '' && -x $config{'block_script'}) {
+		push(@block_cmd, (1, $config{'block_script'}, 'IP'));
+	} else {
+		if (defined($config{'ipset_name'}) && $config{'ipset_name'} ne '') {
+			push(@block_cmd, (3, '/usr/sbin/ipset', 'add', $config{'ipset_name'}, 'IP'));
+			push(@block_cmd, 'comment') if ($config{'block_comments'});
+		} else {
+			my $chain = 'in_hawk';
+			if (defined($config{'iptables_chain'}) && $config{'iptables_chain'} ne '') {
+				$chain = $config{'iptables_chain'};
+			}
+			push(@block_cmd, (6, '/usr/sbin/iptables', '-I', $chain, '-j', 'DROP', '-s', 'IP'));
+			push(@block_cmd, ('-m', 'comment', '--comment')) if ($config{'block_comments'});
+		}
+	}
 	logger("Hawk version $VERSION started!");
 	# This is the lifetime of the broots hash
 	# Each $broot_time all attacker's ips will be removed from the hash
@@ -589,7 +597,7 @@ sub main {
 
 		if ($set_limit && check_broots($hack_attempt->{$attacked_service}->{$attacker_ip}, $config{"block_count"})) {
 			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $attacker_ip, $attacked_service);
-			if (! do_block($attacker_ip, $hack_attempt->{$attacked_service}->{$attacker_ip}, \%config)) {
+			if (! do_block($attacker_ip, $hack_attempt->{$attacked_service}->{$attacker_ip}, \%config, \@block_cmd)) {
 				logger("Failed to block $attacker_ip and store it to $config{'block_list'}") if ($debug);
 			} else {
 				logger("Successfully blocked $attacker_ip and stored to $config{'block_list'}") if ($debug);
@@ -629,7 +637,7 @@ sub main {
 					# Next as the bruteforce attempts are not enough for blocking
 					next if ($attacks{$attackers[0]->[$i]->[1]}[0] < $config{'max_attempts'});
 
-					if (! do_block($attackers[0]->[$i]->[1], $attacks{$attackers[0]->[$i]->[1]}[0], \%config)) {
+					if (! do_block($attackers[0]->[$i]->[1], $attacks{$attackers[0]->[$i]->[1]}[0], \%config, \@block_cmd)) {
 						logger("Failed to block $attackers[0]->[$i]->[1] and store it to $config{'block_list'}") if ($debug);
 					} else {
 						logger("Successfully blocked $attackers[0]->[$i]->[1] and stored to $config{'block_list'}") if ($debug);
