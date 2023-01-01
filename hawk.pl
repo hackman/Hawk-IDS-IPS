@@ -144,7 +144,9 @@ sub check_broots {
 
 sub do_block {
 	my $blocked_ip = shift;
-	my $block_list = shift;
+	my $attempts = shift;
+	my $config_ref = shift;
+	my $block_list = $config_ref{'block_list'};
 	$block_list =~ s/(\r|\n)//g;
 	$blocked_ip = $1 if ($blocked_ip =~ /([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/) or logger ("Illegal ip content at $blocked_ip") and return 0;
 	if (system("/sbin/iptables -I in_hawk -s $blocked_ip -j DROP")) {
@@ -568,7 +570,7 @@ sub main {
 
 		if ($set_limit && check_broots($hack_attempt->{$attacked_service}->{$attacker_ip}, $config{"block_count"})) {
 			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $attacker_ip, $attacked_service);
-			if (! do_block($attacker_ip, $config{'block_list'})) {
+			if (! do_block($attacker_ip, $hack_attempt->{$attacked_service}->{$attacker_ip}, \%config)) {
 				logger("Failed to block $attacker_ip and store it to $config{'block_list'}") if ($debug);
 			} else {
 				logger("Successfully blocked $attacker_ip and stored to $config{'block_list'}") if ($debug);
@@ -608,7 +610,7 @@ sub main {
 					# Next as the bruteforce attempts are not enough for blocking
 					next if ($attacks{$attackers[0]->[$i]->[1]}[0] < $config{'max_attempts'});
 
-					if (! do_block($attackers[0]->[$i]->[1], $config{'block_list'})) {
+					if (! do_block($attackers[0]->[$i]->[1], $attacks{$attackers[0]->[$i]->[1]}[0], \%config)) {
 						logger("Failed to block $attackers[0]->[$i]->[1] and store it to $config{'block_list'}") if ($debug);
 					} else {
 						logger("Successfully blocked $attackers[0]->[$i]->[1] and stored to $config{'block_list'}") if ($debug);
