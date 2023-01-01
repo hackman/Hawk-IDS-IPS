@@ -401,7 +401,9 @@ sub main {
 	my $attacked_svcs = ();
 	
 	# What the name of the pid will be in ps auxwf :)
-	$0 = $config{'daemon_name'};
+	if (defined($config{'daemon_name'}) && $config{'daemon_name'} ne '') {
+		$0 = $config{'daemon_name'};
+	}
 	
 	# make sure that hawk is not running before trying to create a new pid
 	# THIS SHOULD BE FIXED!!!
