@@ -7,12 +7,13 @@ hawk_conf=/etc/hawk.conf
 hawk_logs=''
 hawk_whitelist=''
 mailserver=''
+portalmaster_ip=''
 
-for ip in $(ip -4 -oneline addr list | sed 's/\/[0-9]\{1,2\}//' | awk '{print $4}'); do
-	hawk_whitelist="$ip,$hawk_whitelist"
+for ip in $(ip -4 -oneline addr list|awk '{gsub(/\/.*/,"",$4);print $4}'); do
+	hawk_whitelist="$ip $hawk_whitelist"
 done
 hawk_whitelist="${hawk_whitelist}${portalmaster_ip},"
-sed -i "/block_whitelist/s/=.*/=$hawk_whitelist/" $hawk_conf
+sed -i "/whitelist/s/=.*/=$hawk_whitelist/" $hawk_conf
 
 if [ -f /var/cpanel/cpanel.config ]; then
 	mailserver=$(awk -F = '/mailserver=/{print $2}' /var/cpanel/cpanel.config)
