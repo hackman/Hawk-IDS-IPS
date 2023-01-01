@@ -1,0 +1,14 @@
+* Convert the whitelist checks from hash to Net::Patricia, so we can support IPs and prefixes
+* Convert the whitelist config option from comma to space separated list
+* Create a script to get the local IPs and add them to hawk.conf
+* Create sigHup handler to reload the config
+  - reopen logfile
+  - rewrite the pidfile
+  - reload the whitelist
+  - clean the attackers hash
+* setup_iptables.sh should
+  - handle firewalld, ufw and csf
+  - support ipset
+* detect if the system supports iptables comments and if so, update the configuration file
+* detect the distribution using /etc/os-release in make_rpm.sh
+
