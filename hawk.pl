@@ -24,7 +24,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '6.3';
+my $VERSION = '6.4';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -146,12 +146,28 @@ sub do_block {
 	my $blocked_ip = shift;
 	my $attempts = shift;
 	my $config_ref = shift;
-	my $block_list = $config_ref{'block_list'};
+	my $block_list = $config_ref->{'block_list'};
+	my $comment = "$attempts attempts";
 	$block_list =~ s/(\r|\n)//g;
 	$blocked_ip = $1 if ($blocked_ip =~ /([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/) or logger ("Illegal ip content at $blocked_ip") and return 0;
-	if (system("/sbin/iptables -I in_hawk -s $blocked_ip -j DROP")) {
-		logger("/sbin/iptables -I in_hawk -s $blocked_ip -j DROP FAILED: $!");
-		return 0;
+
+	if (defined($config_ref->{'block_script'}) && $config_ref->{'block_script'} ne '' && -x $config_ref->{'block_script'}) {
+		system($config_ref->{'block_script'}, $blocked_ip, "$comment");
+	} else {
+		if (defined($config_ref->{'ipset_name'}) && $config_ref->{'ipset_name'} ne '') {
+			system('/usr/sbin/ipset', 'add', $config_ref->{'ipset_name'}, $blocked_ip, 'comment', $comment);
+		} else {
+			my $chain = 'in_hawk';
+			my @cmd_line = ();
+			if (defined($config_ref->{'iptables_chain'}) && $config_ref->{'iptables_chain'} ne '') {
+				$chain = $config_ref->{'iptables_chain'};
+			}
+			push(@cmd_line, ('/usr/sbin/iptables', '-I', $chain, '-j', 'DROP', '-s', $blocked_ip));
+			if (defined($config_ref->{'iptables_comments'}) && $config_ref->{'iptables_comments'}) {
+				push(@cmd_line, ('-m', 'comment', '--comment', $comment));
+			}
+			system(@cmd_line);
+		}
 	}
 	$block_list = $1 if ($block_list =~ /^(.*)$/);
 	open BLOCKLIST, '+>>', $block_list or "Failed to open $block_list for append: $!" and return 0;
