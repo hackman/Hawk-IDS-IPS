@@ -1,4 +1,5 @@
 * Add support for block_script
+* Add SQLite support in hawk.pl, hawk-unblock.sh, install_hawk.sh and hawk_config.sh
 * Convert the whitelist checks from hash to Net::Patricia, so we can support IPs and prefixes
 * Support accouting per /24 prefixes, not only single IPs
 * Create sigHup handler to reload the config
