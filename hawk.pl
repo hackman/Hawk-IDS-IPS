@@ -417,8 +417,8 @@ sub main {
 	# Get the local primary ip of the server so we do not block it later
 	# This open a security loop hole in case of local bruteforce attempts
 	# my $local_ip = get_ip();
-	my $whitelislt = $config{'block_whitelist'};
-	my %whitelists = map { $_ => '1' } split /,/, $whitelislt;
+	my $whitelislt = $config{'whitelist'};
+	my %whitelists = map { $_ => '1' } split /\s+/, $whitelislt;
 	my $set_limit = $config{'set_limit'};
 
 	# me are daemon now :)
