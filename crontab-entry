@@ -1,0 +1,2 @@
+15 * * * * root /var/lib/hawk/bin/hawk-unblock.sh
+
