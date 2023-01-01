@@ -612,7 +612,7 @@ sub main {
 				}
 			}
 		} else {
-			logger("Not enough minerals to block $attacker_ip for bruteforcing $config{'services'}{$attacked_service} attempts $hack_attempt->{$attacked_service}->{$attacker_ip}") if ($debug);
+			logger("Not enough minerals to block $attacker_ip for bruteforcing $config{'services'}{$attacked_service} attempts $hack_attempt->{$attacked_service}->{$attacker_ip}(limit $config{'broot_number'})") if ($debug);
 		}
 	
 		# clean all %hack_attempt entries if the $broot_time from the conf passed
