@@ -37,6 +37,18 @@ sub logger {
 	print HAWKLOG strftime('%b %d %H:%M:%S', localtime(time)) . ' ' . $_[0] . "\n" and return 1 or return 0;
 }
 
+sub get_local_ips {
+	my %local_ips = ();
+	open my $ips, '-|', '/usr/sbin/ip -4 a l';
+	while(my $line = <$ips>) {
+		if ($line =~ /inet ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\/[0-9]+/) {
+			$local_ips{$1} = 1;
+		}
+	}
+	close $ips;
+	return %local_ips;
+}
+
 # Compare the current attacker's ip address with the local ips (primary and localhost)
 sub is_local_ip {
 	my %whitelists = %{$_[0]};
@@ -445,7 +457,7 @@ sub main {
 	# This open a security loop hole in case of local bruteforce attempts
 	# my $local_ip = get_ip();
 	my $whitelislt = $config{'whitelist'};
-	my %whitelists = map { $_ => '1' } split /\s+/, $whitelislt;
+	my %whitelists = ( get_local_ips(), map { $_ => '1' } split /\s+/, $whitelislt );
 	my $set_limit = $config{'set_limit'};
 
 	# me are daemon now :)
@@ -830,6 +842,12 @@ In case of too many failed login attempts from a single IP address for certain p
 	Input: None
 
 	Output: None
+
+=head2 get_local_ips() - Get all currently assigned IPs. This makes sure we do not block any local IP in the firewall.
+
+	Input: None
+
+	Output: a hash with keys, all detected IPs and as values 1 for each IP
 
 =head2 store_to_db() - Store the attacker's ip address to the failed_log or broots tables depending on the case
 
