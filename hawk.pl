@@ -159,8 +159,9 @@ sub do_block {
 	my $attempts = shift;
 	my $config_ref = shift;
 	my $cmd_ref = shift;
+	my $info = shift;
 	my $block_list = $config_ref->{'block_list'};
-	my $comment = "$attempts attempts";
+	my $comment = "$info $attempts attempts";
 	my @cmd_line = @{$cmd_ref};
 	my $ip_param = shift(@cmd_line);	# the first parameter in the array shows where the IP should be in the parameters
 
@@ -595,13 +596,13 @@ sub main {
 		my $attacker_ip = $block_results[0];
 		my $attacker_attempts = $block_results[1];
 		my $attacked_service = $block_results[2];
-		my $username = $block_results[3];
+		my $block_info = $block_results[3];
 
 		my $curr_time = time();
 		# Store this failed attempt to the database
-		logger("Storing failed: 0, $attacker_ip, $attacked_service, $username") if ($debug);
-		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $attacker_ip, $attacked_service, $username)) {
-			logger("store_to_db failed: 0, $attacker_ip, $attacked_service, $username!");
+		logger("Storing failed: 0, $attacker_ip, $attacked_service, $block_info") if ($debug);
+		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $attacker_ip, $attacked_service, $block_info)) {
+			logger("store_to_db failed: 0, $attacker_ip, $attacked_service, $block_info!");
 		}
 
 		$hack_attempt->{$attacked_service}->{$attacker_ip} = get_attempts($attacker_attempts, $hack_attempt->{$attacked_service}->{$attacker_ip});
@@ -609,7 +610,7 @@ sub main {
 
 		if ($set_limit && check_broots($hack_attempt->{$attacked_service}->{$attacker_ip}, $config{"block_count"})) {
 			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $attacker_ip, $attacked_service);
-			if (! do_block($attacker_ip, $hack_attempt->{$attacked_service}->{$attacker_ip}, \%config, \@block_cmd)) {
+			if (! do_block($attacker_ip, $hack_attempt->{$attacked_service}->{$attacker_ip}, \%config, \@block_cmd, $block_info)) {
 				logger("Failed to block $attacker_ip and store it to $config{'block_list'}") if ($debug);
 			} else {
 				logger("Successfully blocked $attacker_ip and stored to $config{'block_list'}") if ($debug);
@@ -649,7 +650,7 @@ sub main {
 					# Next as the bruteforce attempts are not enough for blocking
 					next if ($attacks{$attackers[0]->[$i]->[1]}[0] < $config{'max_attempts'});
 
-					if (! do_block($attackers[0]->[$i]->[1], $attacks{$attackers[0]->[$i]->[1]}[0], \%config, \@block_cmd)) {
+					if (! do_block($attackers[0]->[$i]->[1], $attacks{$attackers[0]->[$i]->[1]}[0], \%config, \@block_cmd, $block_info)) {
 						logger("Failed to block $attackers[0]->[$i]->[1] and store it to $config{'block_list'}") if ($debug);
 					} else {
 						logger("Successfully blocked $attackers[0]->[$i]->[1] and stored to $config{'block_list'}") if ($debug);
@@ -791,7 +792,7 @@ In case of too many failed login attempts from a single IP address for certain p
 
 		$block_results[2] - each service parser return it's own unique service id which is the id of the service which is under attack
 
-		$block_results[3] - the username that failed to authenticate to the given service
+		$block_results[3] - the username that failed to authenticate to the given service or a comment provided by the check
 
 =head1 FUNCTIONS
 
