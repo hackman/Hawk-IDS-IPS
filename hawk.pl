@@ -17,7 +17,7 @@ use warnings;
 use DBD::Pg;
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
 
-use lib '/var/lib/hawk/lib/';
+use lib '/usr/lib/hawk/';
 use parse_config;
 
 $SIG{"CHLD"} = \&sigChld;
