@@ -176,7 +176,7 @@ sub do_block {
 
 	$block_list = $1 if ($block_list =~ /^(.*)$/);
 	open BLOCKLIST, '+>>', $block_list or "Failed to open $block_list for append: $!" and return 0;
-	print BLOCKLIST "iptables -I in_hawk -s $blocked_ip -j DROP\n" or "Failed to write to $block_list: $!" and return 0;
+	print BLOCKLIST "iptables -I $config_ref->{'iptables_chain'} -s $blocked_ip -j DROP\n" or "Failed to write to $block_list: $!" and return 0;
 	close BLOCKLIST;
 	return 1;
 }
