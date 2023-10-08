@@ -181,6 +181,24 @@ sub do_block {
 	return 1;
 }
 
+# Parse the exim logs
+sub exim_broot {
+	my $line = shift;
+	my $type = shift;
+	# exim config ID 8
+	# Exim No Such User Here
+	# 2023-09-10 05:25:57 H=(138.219.244.10.static.softdados.net) [138.219.244.10]:41196 F=<i2ai9vzg1vg7@design-print.tv> rejected RCPT <keane@karenkress.com>: No Such User Here
+	# 2023-09-19 18:12:59 dovecot_login authenticator failed for bras-base-mtrlpq1925w-grc-23-174-89-119-244.dsl.bell.ca ([IPv6:::ffff:192.168.2.20]) [174.89.119.244]:64617: 535 Incorrect authentication data (set_id=victor@lattrel.com)
+	if ($type == 0 and $line =~ /\[([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\]:.*No Such User Here/) {
+		logger("IP: $1, Failed: 1, SVC: 8, User: N/A") if ($debug);
+		return ($1, 1, 8, 'SMTP No Such User Here');
+	}
+	if ($type == 1 and $line =~ /dovecot_login authenticator failed.*\[([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\]:/) {
+		logger("IP: $1, Failed: 1, SVC: 8, User: N/A") if ($debug);
+		return ($1, 1, 8, 'Failed SMTP authentication');
+	}
+}
+
 # Parse the pop3/imap logs
 sub dovecot_broot {
 	# Dovecot POP3
@@ -456,7 +474,6 @@ sub main {
 	
 	# Get the local primary ip of the server so we do not block it later
 	# This open a security loop hole in case of local bruteforce attempts
-	# my $local_ip = get_ip();
 	my $whitelislt = $config{'whitelist'};
 	my %whitelists = ( get_local_ips(), map { $_ => '1' } split /\s+/, $whitelislt );
 	my $set_limit = $config{'set_limit'};
@@ -885,6 +902,16 @@ In case of too many failed login attempts from a single IP address for certain p
 	Output:
 		0 if $ip_failed_count < $max_attempts
 		1 if $ip_failed_count >= $max_attempts -> This means, store this IP to the broots db and later block it with iptables via the cron
+
+=head2 exim_broot() - Parse lines that are considered comming from exim
+
+	Input:
+		$_[0] - the log line
+		$_[1] - type of the request, we can directly focus the RE to something that was already matched
+
+	Output:
+		returns failed attempt array, if detected a failed attempt in the log line.
+		otherwise, nothing
 
 =head2 pop_imap_broot() ssh_broot() ftp_broot() cpanel_webmail_broot() - The logs output parsers for the supported services
 
