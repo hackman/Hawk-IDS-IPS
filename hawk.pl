@@ -24,7 +24,7 @@ $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '6.5';
+my $VERSION = '6.7';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
@@ -420,7 +420,7 @@ sub main {
 	if ($monitor_list eq '') {
 		die("Error: no valid file found in monitor_list file list: $config{'monitor_list'}\n");
 	}
-	my $log_list = "/usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
+	my $log_list = "sudo /usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
 
 	if ($debug) {
 		# service_ids=ftp:0 ssh:1 pop3:2 imap:3 webmail:4 cpanel:5 da:6
@@ -439,14 +439,16 @@ sub main {
 		push(@block_cmd, (1, $config{'block_script'}, 'IP'));
 	} else {
 		if (defined($config{'ipset_name'}) && $config{'ipset_name'} ne '') {
-			push(@block_cmd, (3, '/usr/sbin/ipset', 'add', $config{'ipset_name'}, 'IP'));
+			push(@block_cmd, (4, 'sudo', '/usr/sbin/ipset', 'add', $config{'ipset_name'}, 'IP'));
+			# The 'comment' parameter is added to the command, but the actual comment is added in do_block()
 			push(@block_cmd, 'comment') if ($config{'block_comments'});
 		} else {
 			my $chain = 'in_hawk';
 			if (defined($config{'iptables_chain'}) && $config{'iptables_chain'} ne '') {
 				$chain = $config{'iptables_chain'};
 			}
-			push(@block_cmd, (6, '/usr/sbin/iptables', '-I', $chain, '-j', 'DROP', '-s', 'IP'));
+			push(@block_cmd, (7, 'sudo', '/usr/sbin/iptables', '-I', $chain, '-j', 'DROP', '-s', 'IP'));
+			# The 'comment' parameter is added to the command parameters, but the actual comment is added in do_block()
 			push(@block_cmd, ('-m', 'comment', '--comment')) if ($config{'block_comments'});
 		}
 	}
