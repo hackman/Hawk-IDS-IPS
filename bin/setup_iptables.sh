@@ -1,5 +1,7 @@
 #!/bin/bash
-chain=in_hawk
+chain=$(awk -F = '/^iptables_chain/{print $2}' $hawk_conf)
+chain=${iptables_chain:-in_hawk}
+
 comments=''
 # Validate if the system supports iptables comments
 if ! iptables -L INPUT -nv|grep hawk_comment; then
@@ -28,7 +30,7 @@ if ! grep -q :$chain /etc/sysconfig/iptables; then
 fi
 
 # Add a rule to pass all traffic trough our new chain
-if ! grep '\-j in_hawk' /etc/sysconfig/iptables; then
+if ! grep "\-j $chain" /etc/sysconfig/iptables; then
 	last_rule=$(awk '/INPUT/{a=NR}END{print a}' /etc/sysconfig/iptables)
 	sed -i "${last_rule}i-A INPUT -j in_hawk" /etc/sysconfig/iptables
 fi
