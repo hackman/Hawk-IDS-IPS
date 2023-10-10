@@ -43,7 +43,7 @@ mkdir -p %{buildroot}/var/log/hawk
 mkdir -p %{buildroot}/var/run/hawk
 mkdir -p %{buildroot}/var/cache/hawk
 touch %{buildroot}/etc/hawk/block-list
-cp -a etc/hawk.conf      %{buildroot}/etc/hawk/
+cp -a etc/hawk/hawk.conf %{buildroot}/etc/hawk/
 cp -a etc/sudoers.d/hawk %{buildroot}/etc/sudoers.d/
 cp -a etc/systemd/system/hawk.service %{buildroot}/etc/systemd/system
 cp -a etc/cron.d/hawk %{buildroot}/etc/cron.d/hawk
