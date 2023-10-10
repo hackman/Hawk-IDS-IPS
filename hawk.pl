@@ -18,7 +18,7 @@ my $pgsql_available=1;
 my $sqlite_available=1;
 my $debug = 0;
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '7.0';
+my $VERSION = '7.1';
 
 use lib '/usr/lib/hawk/';
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
@@ -419,7 +419,7 @@ sub postfix_broot {
 # This is the main function which calls all other functions
 # The entire logic is stored here
 sub main {
-	my $conf = '/etc/hawk.conf';
+	my $conf = '/etc/hawk/hawk.conf';
 	my %config = parse_config($conf);
 	my @block_cmd = ();
 
