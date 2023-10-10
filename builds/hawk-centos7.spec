@@ -76,12 +76,13 @@ rm -rf %{buildroot}
 %attr(700, hawk, hawk) /var/cache/hawk
 
 %pre
-%post
-%systemd_post hawk.service
-
 if ! getent passwd hawk > /dev/null; then
 	useradd -d /var/cache/hawk -c "Hawk IDS/IPS" hawk
 fi
+
+%post
+%systemd_post hawk.service
+
 
 # Initialize the Hawk SQLite DB
 if [ ! -f /var/cache/hawk/hawk.sqlite ]; then
