@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 Type=forking
+User=hawk
 
 # Disable OOM kill for this process
 OOMScoreAdjust=-1000
