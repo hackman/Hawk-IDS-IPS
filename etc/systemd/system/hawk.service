@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=forking
 
-# Disable OOM kill on the postmaster
+# Disable OOM kill for this process
 OOMScoreAdjust=-1000
 
 ExecStart=/usr/sbin/hawk.pl
