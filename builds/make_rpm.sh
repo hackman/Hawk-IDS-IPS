@@ -1,6 +1,6 @@
 #!/bin/bash
-files='hawk.pl lib hawk.conf hawk.sql README LICENSE crontab-entry hawk.service bin/setup_iptables.sh bin/hawk-unblock.sh'
-version=0.1
+files='hawk.pl lib etc db/hawk.pgsql db/hawk.sqlite README LICENSE bin/setup_iptables.sh bin/hawk-unblock.sh'
+version=0.2
 
 cd ..
 
