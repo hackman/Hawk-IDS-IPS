@@ -13,4 +13,7 @@
   - support ipset (creation of the ipset, adding the rule, setting up the configuration file setting)
   - handle firewalld, ufw and csf
 * detect the distribution using /etc/os-release in make_rpm.sh
-
+* In do_block() 
+  - fix the regex to actually verify the block_list
+  - update the print to store the actual command, not this hardcoded iptables
+* Add support for Redis instead of SQL
