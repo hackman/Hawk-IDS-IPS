@@ -90,9 +90,6 @@ if [ ! -f /var/cache/hawk/hawk.sqlite ]; then
 	chown hawk: /usr/share/hawk/hawk_db.sqlite
 fi
 
-# Create the in_hawk chain and pass traffic trough it
-/usr/share/hawk/setup_iptables.sh
-
 %postun
 %systemd_postun_with_restart hawk.service
 
