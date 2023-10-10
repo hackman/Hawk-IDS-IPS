@@ -14,4 +14,15 @@ Hawk currently supports:
   proftpd
   cPanel
   DirectAdmin
+  Postfix
+  Exim with dovecot auth
+
+
+Installation CentOS:
+1. rpm -Uvh hawk-7.2-1.src.rpm
+2. Setup iptables or ipset
+2.1. For ipset, create a new ipset and add its name in /etc/hawk/hawk.conf on the ipset_name line.
+2.2. For iptables, you can either create the chain by your self and set its name in hawk.conf or you can use /usr/share/hawk/setup_iptables.sh helper script, to do that for you.
+3. systemctl start hawk
+
 
