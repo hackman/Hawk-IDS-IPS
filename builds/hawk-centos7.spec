@@ -72,17 +72,22 @@ rm -rf %{buildroot}
 %attr(700, root, root) /usr/sbin/hawk-unblock.sh
 %attr(755, root, root) /usr/share/hawk
 %attr(700, root, root) /usr/share/hawk/setup_iptables.sh
-%attr(755, root, root) /var/log/hawk
-%attr(755, root, root) /var/run/hawk
-%attr(700, root, root) /var/cache/hawk
+%attr(755, hawk, hawk) /var/log/hawk
+%attr(755, hawk, hawk) /var/run/hawk
+%attr(700, hawk, hawk) /var/cache/hawk
 
 %pre
 %post
 %systemd_post hawk.service
 
+if ! getent passwd hawk > /dev/null; then
+	useradd -d /var/cache/hawk -c "Hawk IDS/IPS" hawk
+fi
+
 # Initialize the Hawk SQLite DB
 if [ ! -f /var/cache/hawk/hawk.sqlite ]; then
 	sqlite3 /var/cache/hawk/hawk.sqlite < /usr/share/hawk/hawk_db.sqlite
+	chown hawk: /usr/share/hawk/hawk_db.sqlite
 fi
 
 # Create the in_hawk chain and pass traffic trough it
@@ -90,6 +95,10 @@ fi
 
 %postun
 %systemd_postun_with_restart hawk.service
+
+if getent passwd hawk > /dev/null; then
+	userdel -r hawk
+fi
 
 %posttrans
 #%changelog
