@@ -1,4 +1,4 @@
-SET client_encoding = 'SQL_ASCII';
+SET client_encoding = 'UTF8';
 SET check_function_bodies = false;
 SET SESSION AUTHORIZATION 'postgres';
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
@@ -23,8 +23,7 @@ CREATE TABLE failed_log (
 );
 
 
-ALTER TABLE ONLY failed_log
-    ADD CONSTRAINT failed_log_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY failed_log ADD CONSTRAINT failed_log_pkey PRIMARY KEY (id);
 
 SELECT pg_catalog.setval('broots_id_seq', 1, false);
 SELECT pg_catalog.setval('failed_log_id_seq', 1, false);
@@ -50,5 +49,6 @@ CREATE TABLE blacklist (
 
 COMMENT ON TABLE blacklist IS 'Blacklisted IPs';
 ALTER TABLE ONLY blacklist ADD CONSTRAINT blacklist_pkey PRIMARY KEY (id);
+DROP INDEX date_added;
 CREATE INDEX date_added ON blacklist USING btree (date_add);
 
