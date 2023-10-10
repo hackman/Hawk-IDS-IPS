@@ -17,8 +17,9 @@ use warnings;
 my $pgsql_available=1;
 my $sqlite_available=1;
 my $debug = 0;
+my $tail_pid = 0;
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '7.1';
+my $VERSION = '7.2';
 
 use lib '/usr/lib/hawk/';
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
@@ -28,6 +29,7 @@ eval "use DBD::Pg; 1" or $pgsql_available = 0;
 eval "use DBD::SQLite; 1" or $sqlite_available = 0;
 
 $SIG{"CHLD"} = \&sigChld;
+$SIG{"INT"} = \&sigINT;
 $SIG{__DIE__}  = sub { logger(@_); };
 
 
@@ -109,6 +111,14 @@ sub sigChld {
 	while (waitpid(-1,WNOHANG) > 0) {
 		logger("The child has been cleaned!") if ($debug);
 	}
+}
+
+# Kill children and exit
+
+sub sigINT {
+	kill 'INT', $tail_pid;
+	logger("Quiting");
+	exit 0;
 }
 
 # If $_[3] is 0, store the failed login attempt to the DB
@@ -455,7 +465,6 @@ sub main {
 		die("Error: no valid file found in monitor_list file list: $config{'monitor_list'}\n");
 	}
 	my $log_list = "/usr/bin/sudo /usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
-	#my $log_list = "/usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
 
 	if ($debug) {
 		# service_ids=ftp:0 ssh:1 pop3:2 imap:3 webmail:4 cpanel:5 da:6
@@ -535,7 +544,7 @@ sub main {
 	}
 	
 	# use tail to open all logs that should be monitored
-	open LOGS, $log_list or die "open $log_list failed: $!\n";
+	$tail_pid = open LOGS, $log_list or die "open $log_list failed: $!\n";
 	
 	# make the output of the opened logs unbuffered
 	select((select(HAWKLOG), $| = 1)[0]);
@@ -894,7 +903,7 @@ In case of too many failed login attempts from a single IP address for certain p
 		0 on failure
 		1 on success
 
-=head2 sigChld() - Reaper of the dead childs
+=head2 sigChld() - Reaper of the dead children
 
 	Called only in case of SIG CHILD
 
