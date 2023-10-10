@@ -1,0 +1,26 @@
+CREATE TABLE blacklist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    date_add DATETIME DEFAULT CURRENT_TIMESTAMP,
+    date_rem DATETIME DEFAULT NULL,
+    ip text,
+    reason text,
+    count integer
+);
+
+CREATE TABLE failed_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    date DATETIME DEFAULT CURRENT_TIMESTAMP, -- When was the failed login detected
+    ip text NOT NULL, -- ip from where it was detected
+    "user" text NOT NULL, -- username which was under attack
+    service text NOT NULL, -- service which was under attack
+    broot boolean DEFAULT false NOT NULL -- is this a brootforce attack
+);
+
+CREATE TABLE broots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    date DATETIME DEFAULT CURRENT_TIMESTAMP, -- When was brootforce detected
+    ip text NOT NULL, -- ip from where it was detected
+    service text NOT NULL -- service that was under attack
+);
+
+CREATE INDEX IF NOT EXISTS date_added ON blacklist (date_add);
