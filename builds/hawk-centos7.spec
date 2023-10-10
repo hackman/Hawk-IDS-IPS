@@ -90,6 +90,11 @@ if [ ! -f /var/cache/hawk/hawk.sqlite ]; then
 	chown hawk: /usr/share/hawk/hawk_db.sqlite
 fi
 
+%preun
+if [ -f /var/run/hawk/hawk.pid ]; then
+	kill $(cat /var/run/hawk/hawk.pid)
+fi
+
 %postun
 %systemd_postun_with_restart hawk.service
 
