@@ -14,23 +14,31 @@
 use strict;
 use warnings;
 
-use DBD::Pg;
-use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
+my $pgsql_available=1;
+my $sqlite_available=1;
+my $debug = 0;
+$ENV{PATH} = '';		# remove unsecure path
+my $VERSION = '7.0';
 
 use lib '/usr/lib/hawk/';
+use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
 use parse_config;
+
+eval "use DBD::Pg; 1" or $pgsql_available = 0;
+eval "use DBD::SQLite; 1" or $sqlite_available = 0;
 
 $SIG{"CHLD"} = \&sigChld;
 $SIG{__DIE__}  = sub { logger(@_); };
 
-$ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '6.7';
 
 # input/output should be unbuffered. pass it as soon as you get it
 our $| = 1;
 
-my $debug = 0;
 $debug = 1 if (defined($ARGV[0]));
+
+if (!$pgsql_available && !$sqlite_available) {
+	die("Unable to find SQLite and PgSQL support. At least one of them is required!\n");
+}
 
 # This will be our function that will print all logger requests to /var/log/$logfile
 sub logger {
@@ -107,25 +115,49 @@ sub sigChld {
 # If $_[3] is 1, store the bruteforce attempt to the DB
 # The brootforce table is later checked by the cron
 sub store_to_db {
-	# $_[0] DB name
-	# $_[1] DB user
-	# $_[2] DB pass
-	# $_[3] 0 insert into failed_log || 1 for insert into broots a.k.a 0 for log_me || 1 for broot_me || 2 inser into blacklist
-	# $_[4] IP
-	# $_[5] The service under attack - 0 = ftp, 1 = ssh, 2 = pop3, 3 = imap, 4 = webmail, 5 = cpanel | failed attempts if $_[3] == 2
-	# $_[6] The user who is bruteforcing only if $_[3] == log_me
-	my $conn = DBI->connect_cached($_[0], $_[1], $_[2], { PrintError => 1, AutoCommit => 1 }) or return 0;
+	# $_[0] Reference to the config
+	# $_[1]
+	#   0 - insert into failed_log (log_me)
+	#	1 - insert into broots (broot_me)
+	#   2 - insert into blacklist (log_block)
+	# $_[2] IP
+	# $_[3] The service under attack or undefined if $_[1] == 2
+	#	0 - ftp
+	#	1 - ssh
+	#	2 - pop3
+	#	3 - imap
+	#	4 - webmail
+	#	5 - cpanel
+	#	6 - directadmin
+	#	7 - postifx
+	# $_[4] number of failed attempts
+	# $_[5] The user who is bruteforcing only if $_[1] == 0(log_me)
+	my $config_ref = $_[0];
+	my $type = $_[1];
+	my $ip = $_[2];
+	my $service_id = $_[3];
+	my $attempts = $_[4];
+	my $user = $_[5];
+	my $conn;
+
+	if ($config_ref->{'db_type'} eq 'sqlite') {
+		$conn = DBI->connect($config_ref->{'db_sqlite'},'','') or return 0;
+	} elsif ($config_ref->{'db_type'} eq 'mysql') {
+		$conn = DBI->connect_cached($config_ref->{'db_user'}, $config_ref->{'db_pass'}, $config_ref->{'db_mysql'}, { PrintError => 1, AutoCommit => 1 }) or return 0;
+	} else {
+		$conn = DBI->connect_cached($config_ref->{'db_user'}, $config_ref->{'db_pass'}, $config_ref->{'db_pgsql'}, { PrintError => 1, AutoCommit => 1 }) or return 0;
+	}
 
 	# Store each failed attempt to the failed_log table
-	if ($_[3] == 0) {
+	if ($type == 0) {
 		my $log_me = $conn->prepare('INSERT INTO failed_log ( ip, service, "user" ) VALUES ( ?, ?, ? ) ') or return 0;
-		$log_me->execute($_[4], $_[5], $_[6]) or return 0;
-	} elsif ($_[3] == 1) {
+		$log_me->execute($ip, $service_id, $user) or return 0;
+	} elsif ($type == 1) {
 		my $broot_me = $conn->prepare('INSERT INTO broots ( ip, service ) VALUES ( ?, ? ) ') or return 0;
-		$broot_me->execute($_[4], $_[5]) or return 0;
-	} elsif ($_[3] == 2) {
+		$broot_me->execute($ip, $service_id) or return 0;
+	} elsif ($type == 2) {
 		my $log_block = $conn->prepare('INSERT INTO blacklist ( date_add, ip, count, reason ) VALUES (now(), ?, ?, ?)') or return 0;
-		$log_block->execute($_[4], $_[5], "Blocking IP $_[4] for having $_[5] $_[6] attempts") or return 0;
+		$log_block->execute($ip, $attempts, "Blocking IP $ip for having $attempts $user attempts") or return 0;
 	}
 
 	$conn->disconnect;
@@ -155,18 +187,17 @@ sub check_broots {
 }
 
 sub do_block {
+	my $config_ref = shift;
 	my $blocked_ip = shift;
 	my $attempts = shift;
-	my $config_ref = shift;
 	my $cmd_ref = shift;
 	my $info = shift;
 	my $block_list = $config_ref->{'block_list'};
-	my $comment = "$info $attempts attempts";
 	my @cmd_line = @{$cmd_ref};
 	my $ip_param = shift(@cmd_line);	# the first parameter in the array shows where the IP should be in the parameters
 
 	# For all commands, the comment is the last parameter, so add it here, if supported on this system
-	push(@cmd_line, $comment) if ($config_ref->{'block_comments'});
+	push(@cmd_line, "$info $attempts attempts") if ($config_ref->{'block_comments'});
 
 	$block_list =~ s/(\r|\n)//g;
 	$blocked_ip = $1 if ($blocked_ip =~ /([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/) or logger ("Illegal ip content at $blocked_ip") and return 0;
@@ -174,6 +205,9 @@ sub do_block {
 	$cmd_line[$ip_param] = $blocked_ip;
 	system(@cmd_line);
 
+	# TODO:
+	#  - fix the regex to actually verify the block_list
+	#  - update the print to store the actual command, not this hardcoded iptables
 	$block_list = $1 if ($block_list =~ /^(.*)$/);
 	open BLOCKLIST, '+>>', $block_list or "Failed to open $block_list for append: $!" and return 0;
 	print BLOCKLIST "iptables -I $config_ref->{'iptables_chain'} -s $blocked_ip -j DROP\n" or "Failed to write to $block_list: $!" and return 0;
@@ -420,7 +454,8 @@ sub main {
 	if ($monitor_list eq '') {
 		die("Error: no valid file found in monitor_list file list: $config{'monitor_list'}\n");
 	}
-	my $log_list = "sudo /usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
+	my $log_list = "/usr/bin/sudo /usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
+	#my $log_list = "/usr/bin/tail -s 1.00 -F --max-unchanged-stats=30 $monitor_list |";
 
 	if ($debug) {
 		# service_ids=ftp:0 ssh:1 pop3:2 imap:3 webmail:4 cpanel:5 da:6
@@ -439,7 +474,7 @@ sub main {
 		push(@block_cmd, (1, $config{'block_script'}, 'IP'));
 	} else {
 		if (defined($config{'ipset_name'}) && $config{'ipset_name'} ne '') {
-			push(@block_cmd, (4, 'sudo', '/usr/sbin/ipset', 'add', $config{'ipset_name'}, 'IP'));
+			push(@block_cmd, (4, '/usr/bin/sudo', '/usr/sbin/ipset', 'add', $config{'ipset_name'}, 'IP'));
 			# The 'comment' parameter is added to the command, but the actual comment is added in do_block()
 			push(@block_cmd, 'comment') if ($config{'block_comments'});
 		} else {
@@ -447,7 +482,7 @@ sub main {
 			if (defined($config{'iptables_chain'}) && $config{'iptables_chain'} ne '') {
 				$chain = $config{'iptables_chain'};
 			}
-			push(@block_cmd, (7, 'sudo', '/usr/sbin/iptables', '-I', $chain, '-j', 'DROP', '-s', 'IP'));
+			push(@block_cmd, (7, '/usr/bin/sudo', '/usr/sbin/iptables', '-I', $chain, '-j', 'DROP', '-s', 'IP'));
 			# The 'comment' parameter is added to the command parameters, but the actual comment is added in do_block()
 			push(@block_cmd, ('-m', 'comment', '--comment')) if ($config{'block_comments'});
 		}
@@ -500,7 +535,7 @@ sub main {
 	}
 	
 	# use tail to open all logs that should be monitored
-	open LOGS, $log_list or die "open $log_list with tail failed: $!\n";
+	open LOGS, $log_list or die "open $log_list failed: $!\n";
 	
 	# make the output of the opened logs unbuffered
 	select((select(HAWKLOG), $| = 1)[0]);
@@ -616,28 +651,32 @@ sub main {
 		my $attacker_attempts = $block_results[1];
 		my $attacked_service = $block_results[2];
 		my $block_info = $block_results[3];
+		my $failed_attempts = 0;
 
 		my $curr_time = time();
 		# Store this failed attempt to the database
 		logger("Storing failed: 0, $attacker_ip, $attacked_service, $block_info") if ($debug);
-		if (! store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 0, $attacker_ip, $attacked_service, $block_info)) {
+		if (! store_to_db(\%config, 0, $attacker_ip, $attacked_service, $attacker_attempts, $block_info)) {
 			logger("store_to_db failed: 0, $attacker_ip, $attacked_service, $block_info!");
 		}
 
+		# Store it in the global per-service hash
 		$hack_attempt->{$attacked_service}->{$attacker_ip} = get_attempts($attacker_attempts, $hack_attempt->{$attacked_service}->{$attacker_ip});
-		logger("Failed attempts are $hack_attempt->{$attacked_service}->{$attacker_ip}") if ($debug);
+		# Create a local value, to be human readable in the current context
+		$failed_attempts = $hack_attempt->{$attacked_service}->{$attacker_ip};
 
-		if ($set_limit && check_broots($hack_attempt->{$attacked_service}->{$attacker_ip}, $config{"block_count"})) {
-			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $attacker_ip, $attacked_service);
-			if (! do_block($attacker_ip, $hack_attempt->{$attacked_service}->{$attacker_ip}, \%config, \@block_cmd, $block_info)) {
-				logger("Failed to block $attacker_ip and store it to $config{'block_list'}") if ($debug);
-			} else {
+		logger("Failed attempts are $failed_attempts") if ($debug);
+		if ($set_limit && check_broots($failed_attempts, $config{"block_count"})) {
+			store_to_db(\%config, 1, $attacker_ip, $attacked_service, $attacker_attempts, $block_info);
+			if (do_block(\%config, $attacker_ip, $failed_attempts, \@block_cmd, $block_info)) {
 				logger("Successfully blocked $attacker_ip and stored to $config{'block_list'}") if ($debug);
-				store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $attacker_ip, $config{"block_count"}, "failed");
+				store_to_db(\%config, 2, $attacker_ip, $attacked_service, $config{"block_count"}, "failed");
+			} else {
+				logger("Failed to block $attacker_ip and store it to $config{'block_list'}") if ($debug);
 			}
-		} elsif (check_broots($hack_attempt->{$attacked_service}->{$attacker_ip}, $config{"broot_number"})) {
+		} elsif (check_broots($failed_attempts, $config{"broot_number"})) {
 			#logger("store_to_db(broots): 1, ip, service code");
-			store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 1, $attacker_ip, $attacked_service);
+			store_to_db(\%config, 1, $attacker_ip, $attacked_service, $attacker_attempts, $block_info);
 
 			# Zero the number of failed attempts for this IP so we can prevent adding a new brute record on attempt_to_brute+1
 			$hack_attempt->{$attacked_service}->{$attacker_ip} = 0;
@@ -649,7 +688,7 @@ sub main {
 			# attacked_svcs->{service}[0] - Time of detection of the attempt
 			# attacked_svcs->{service}[1] - IP of the attacker
 
-			while (my ($service, @attackers) = each %$attacked_svcs) {
+			while (my ($service_id, @attackers) = each %$attacked_svcs) {
 				my %attacks = ();
 				# attacks{IP}[0] - 0 - number of bruteforce attempts per-IP
 				# attacks{IP}[1] - 1 - storred to DB
@@ -669,16 +708,16 @@ sub main {
 					# Next as the bruteforce attempts are not enough for blocking
 					next if ($attacks{$attackers[0]->[$i]->[1]}[0] < $config{'max_attempts'});
 
-					if (! do_block($attackers[0]->[$i]->[1], $attacks{$attackers[0]->[$i]->[1]}[0], \%config, \@block_cmd, $block_info)) {
-						logger("Failed to block $attackers[0]->[$i]->[1] and store it to $config{'block_list'}") if ($debug);
-					} else {
+					if (do_block(\%config, $attackers[0]->[$i]->[1], $attacks{$attackers[0]->[$i]->[1]}[0], \@block_cmd, $block_info)) {
 						logger("Successfully blocked $attackers[0]->[$i]->[1] and stored to $config{'block_list'}") if ($debug);
-						$attacks{$attackers[0]->[$i]->[1]}[1] = store_to_db($config{"db"}, $config{"dbuser"}, $config{"dbpass"}, 2, $attackers[0]->[$i]->[1], $config{'max_attempts'}, "bruteforce");
+						$attacks{$attackers[0]->[$i]->[1]}[1] = store_to_db(\%config, 2, $attackers[0]->[$i]->[1], $service_id, $config{'max_attempts'}, "bruteforce");
+					} else {
+						logger("Failed to block $attackers[0]->[$i]->[1] and store it to $config{'block_list'}") if ($debug);
 					}
 				}
 			}
 		} else {
-			logger("Not enough minerals to block $attacker_ip for bruteforcing $config{'services'}{$attacked_service} attempts $hack_attempt->{$attacked_service}->{$attacker_ip}(limit $config{'broot_number'})") if ($debug);
+			logger("Not enough minerals to block $attacker_ip for bruteforcing $config{'services'}{$attacked_service} attempts $failed_attempts(limit $config{'broot_number'})") if ($debug);
 		}
 	
 		# clean all %hack_attempt entries if the $broot_time from the conf passed
@@ -939,9 +978,9 @@ In case of too many failed login attempts from a single IP address for certain p
 
 	db - The name of the database where the data will be stored by the daemon
 	
-	dbuser - The name of the user which has the rights to connect and store info to the db
+	db_user - The name of the user which has the rights to connect and store info to the db
 
-	dbpass - ...
+	db_pass - ...
 
 	template_path - Path to the hawk templates. Used only by hawk-web.pl
 
