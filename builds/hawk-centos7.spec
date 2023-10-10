@@ -7,6 +7,7 @@ URL:		https://github.com/hackman/Hawk-IDS-IPS
 Source0:	%{name}-%{version}.tgz
 BuildArch:	noarch
 BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
+BuildRequires: systemd-rpm-macros
 Requires:	perl perl-DBD-SQLite iptables iptables-services
 Provides:	hawk
 AutoReqProv: no
@@ -36,6 +37,7 @@ rm -rf %{buildroot}
 mkdir -p %{buildroot}/etc/hawk
 mkdir -p %{buildroot}/etc/cron.d
 mkdir -p %{buildroot}/etc/systemd/system
+mkdir -p %{buildroot}/etc/sudoers.d
 mkdir -p %{buildroot}/usr/sbin
 mkdir -p %{buildroot}/usr/share/hawk
 mkdir -p %{buildroot}/usr/lib/hawk
@@ -49,9 +51,10 @@ cp -a etc/systemd/system/hawk.service %{buildroot}/etc/systemd/system
 cp -a etc/cron.d/hawk %{buildroot}/etc/cron.d/hawk
 cp -a etc/cron.d/hawk %{buildroot}/usr/share/hawk/crontab-entry
 cp -a hawk.pl %{buildroot}/usr/sbin
-cp -a lib/parse_config.pm %{buildroot}/usr/lib/hawk/
-cp -a db/hawk_db.pgsql db/hawk_db.sqlite README LICENSE %{buildroot}/usr/share/hawk
-cp -a hawk-unblock.sh setup_iptables.sh %{buildroot}/usr/lib/hawk/bin
+cp -a hawk-unblock.sh %{buildroot}/usr/sbin
+cp -a lib/parse_config.pm %{buildroot}/usr/lib/hawk
+cp -a setup_iptables.sh %{buildroot}/usr/share/hawk
+cp -a hawk_db.pgsql hawk_db.sqlite README LICENSE %{buildroot}/usr/share/hawk
 
 %clean
 rm -rf %{buildroot}
@@ -60,19 +63,22 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %config(noreplace)     /etc/hawk/hawk.conf
 %config(noreplace)     /etc/systemd/system/hawk.service
+%config(noreplace)     /etc/hawk/block-list
+%attr(600, root, root) /etc/sudoers.d/hawk
 %attr(600, root, root) /etc/cron.d/hawk
 %attr(700, root, root) /usr/lib/hawk
-%attr(600, root, root) /usr/lib/hawk/block-list
 %attr(755, root, root) /usr/lib/hawk/parse_config.pm
 %attr(700, root, root) /usr/sbin/hawk.pl
+%attr(700, root, root) /usr/sbin/hawk-unblock.sh
 %attr(755, root, root) /usr/share/hawk
+%attr(700, root, root) /usr/share/hawk/setup_iptables.sh
 %attr(755, root, root) /var/log/hawk
 %attr(755, root, root) /var/run/hawk
 %attr(700, root, root) /var/cache/hawk
 
 %pre
 %post
-systemctl enable hawk
+%systemd_post hawk.service
 
 # Initialize the Hawk SQLite DB
 if [ ! -f /var/cache/hawk/hawk.sqlite ]; then
@@ -80,7 +86,10 @@ if [ ! -f /var/cache/hawk/hawk.sqlite ]; then
 fi
 
 # Create the in_hawk chain and pass traffic trough it
-/var/lib/hawk/bin/setup_iptables.sh
+/usr/share/hawk/setup_iptables.sh
+
+%postun
+%systemd_postun_with_restart hawk.service
 
 %posttrans
 #%changelog
