@@ -29,3 +29,6 @@ spec=hawk-centos7.spec
 sed -i "/Version:/s/[0-9]\+\.[0-9]\+/$version/" builds/$spec
 /usr/bin/cp -f builds/$spec $rpm_build_dir/SPECS/
 echo "Archive $archive created"
+
+cd $rpm_build_dir
+rpmbuild -v -ba SPECS/hawk-centos7.spec
