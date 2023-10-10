@@ -13,20 +13,21 @@
 use strict;
 use warnings;
 
-use DBD::Pg;
+#use DBD::Pg;
+use DBD::SQLite;
 use CGI qw(param);
 use CGI::Carp qw(fatalsToBrowser);
 use POSIX qw(setsid), qw(strftime);	# use only setsid & strftime from POSIX
 use File::Basename;
 
-use lib '/var/lib/hawk/lib';
+use lib '/usr/lib/hawk';
 use parse_config;
 
 # system variables
 $ENV{PATH} = '';					# remove unsecure path
-my $VERSION = '2.0.2';				# version string
+my $VERSION = '2.1';				# version string
 
-my $conf = '/home/sentry/hackman/hawk-web.conf';
+my $conf = '/etc/hawk/web.conf';
 # make DB vars
 my $html	= '';
 my %config = parse_config($conf);
@@ -94,7 +95,7 @@ sub get_num_service {
 print "Content-type: text/html\r\n\r\n";
 
 # prepare the connection
-our $conn	= DBI->connect( $config{'db'}, $config{'dbuser'}, $config{'dbpass'}, { PrintError => 1, AutoCommit => 1 } ) 
+our $conn	= DBI->connect( $config{'db_pgsql'}, $config{'db_user'}, $config{'db_pass'}, { PrintError => 1, AutoCommit => 1 } )
 	or web_error("Unable to connecto to DB: $!\n");
 
 my $action='';
