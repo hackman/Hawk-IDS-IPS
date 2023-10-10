@@ -67,7 +67,7 @@ rm -rf %{buildroot}
 %attr(600, root, root) /etc/cron.d/hawk
 %attr(700, root, root) /usr/lib/hawk
 %attr(755, root, root) /usr/lib/hawk/parse_config.pm
-%attr(700, root, root) /usr/sbin/hawk.pl
+%attr(750, hawk, root) /usr/sbin/hawk.pl
 %attr(700, root, root) /usr/sbin/hawk-unblock.sh
 %attr(755, root, root) /usr/share/hawk
 %attr(700, root, root) /usr/share/hawk/setup_iptables.sh
