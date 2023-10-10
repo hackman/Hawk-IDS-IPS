@@ -7,7 +7,6 @@ URL:		https://github.com/hackman/Hawk-IDS-IPS
 Source0:	%{name}-%{version}.tgz
 BuildArch:	noarch
 BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
-BuildRequires: systemd-rpm-macros
 Requires:	perl perl-DBD-SQLite iptables iptables-services
 Provides:	hawk
 AutoReqProv: no
