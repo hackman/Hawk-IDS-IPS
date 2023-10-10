@@ -65,7 +65,7 @@ rm -rf %{buildroot}
 %config(noreplace)     /etc/hawk/block-list
 %attr(600, root, root) /etc/sudoers.d/hawk
 %attr(600, root, root) /etc/cron.d/hawk
-%attr(700, root, root) /usr/lib/hawk
+%attr(750, hawk, root) /usr/lib/hawk
 %attr(755, root, root) /usr/lib/hawk/parse_config.pm
 %attr(750, hawk, root) /usr/sbin/hawk.pl
 %attr(700, root, root) /usr/sbin/hawk-unblock.sh
