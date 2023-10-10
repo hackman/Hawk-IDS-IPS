@@ -19,7 +19,7 @@ my $sqlite_available=1;
 my $debug = 0;
 my $tail_pid = 0;
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '7.2';
+my $VERSION = '7.3';
 
 use lib '/usr/lib/hawk/';
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
@@ -245,6 +245,7 @@ sub exim_broot {
 
 # Parse the pop3/imap logs
 sub dovecot_broot {
+	my $line = $_;
 	# Dovecot POP3
 	#Aug 30 03:01:57 tester dovecot: pop3-login: method=PLAIN, rip=87.118.135.130, lip=209.62.32.14 Disconnected (auth failed, 2 attempts)
 	#Aug 30 03:11:00 tester dovecot: pop3-login: method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected Disconnected (auth failed, 3 attempts)
@@ -260,15 +261,24 @@ sub dovecot_broot {
 	#Aug 30 03:15:37 tester dovecot: imap-login: user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected Disconnected (auth failed, 1 attempts)
 	#Aug 30 03:20:26 tester dovecot: imap-login: Disconnected (auth failed, 1 attempts): user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14
 	#Aug 30 03:20:40 tester dovecot: imap-login: Disconnected (auth failed, 1 attempts): user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected
+	#Oct 10 14:33:07 auth: Info: sql(cats@yuhu.biz,80.94.95.181): unknown user
+	#Oct 10 14:33:20 auth: Info: sql(admin,109.237.98.153): unknown user
 
 	my $current_service = 3; # The default service id is 3 -> imap
-	$current_service = 2 if ($_ =~ /pop3-login:/); # Service is now 2 -> pop3
+	$current_service = 2 if ($line =~ /pop3-login:/); # Service is now 2 -> pop3
 
 	# Extract the user, ip and number of failed attempts from the log
 	my $user = 'multiple';
-	$user = $1 if ($_ =~ /^.* user=<(.+)>,.*$/);
-	my $ip = $1 if ($_ =~ /^.* rip=([0-9.]+),.*$/);
-	my $attempts = $1 if ($_ =~ /^.* ([0-9]+) attempts\).*$/);
+	my $ip = '';
+	my $attempts = 1;
+	if ($line =~ /auth: Info: sql\((.*),([0-9]+.[0-9]+\.[0-9]+\.[0-9]+)\): unknown user/) {
+		$user = $1;
+		$ip = $2;
+	} else {
+		$user = $1 if ($line =~ /^.* user=<(.+)>,.*$/);
+		$ip = $1 if ($line =~ /^.* rip=([0-9.]+),.*$/);
+		$attempts = $1 if ($line =~ /^.* ([0-9]+) attempts\).*$/);
+	}
 	chomp ($user, $ip, $attempts);
 	logger("Returning User: $user IP: $ip Attempts $attempts") if ($debug);
 	# return ip, number of failed attempts, service under attack, failed username
@@ -622,7 +632,7 @@ sub main {
 
 		if (defined($config{'watch_dovecot'}) && $config{'watch_dovecot'}) {
 			# Make sure to skip lines that say "Internal login failure". This is internal processing error inside the daemon itself and should not be considered as attack
-			if ($_ =~ /pop3-login:|imap-login:/ && $_ =~ /auth failed/ && $_ !~ /Internal/) { # This looks like a pop3/imap attack.
+			if (($_ =~ /pop3-login:|imap-login:/ or $_ =~ /auth: Info: sql\(.*unknown user/)&& $_ =~ /auth failed/ && $_ !~ /Internal/) { # This looks like a pop3/imap attack.
 				logger ("calling dovecot_broot") if ($debug);
 				@block_results = dovecot_broot($_); # Pass the log line to the pop_imap_broot parser and get the attacker's details
 			}
