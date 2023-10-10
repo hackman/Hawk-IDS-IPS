@@ -15,6 +15,9 @@ archive=${package}.tgz
 
 mkdir $package
 cp -a $files $package/
+if [[ -f $archive ]]; then
+	rm -f $archive
+fi
 tar cfz $archive $package
 rpm_build_dir=~/rpmbuild
 sources_dir=$rpm_build_dir/SOURCES/
