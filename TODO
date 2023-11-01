@@ -18,3 +18,5 @@
   - update the print to store the actual command, not this hardcoded iptables
 * Add support for Redis instead of SQL
 * Logrotate configuration for hawk.log (if logrotate is detected on the machine)
+* Swith hawk-unblock.sh to use .pgpass by creating a setup script for that from hawk.init
+* Build a Deb package
