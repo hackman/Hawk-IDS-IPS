@@ -402,13 +402,22 @@ sub proftpd_broot {
 	return ($ip, 1, 0, $user);
 }
 
-sub cpanel_webmail_broot {
+sub cpanel_broot {
 	#209.62.36.16 - webmail.1h216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
 	#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
+	#[2023-11-27 11:29:46 -0500] info [whostmgrd] 185.117.82.70 - dd "GET / HTTP/1.1" FAILED LOGIN whostmgrd: login attempt to whm by a non-reseller/root
+
 	my @cpanel = split /\s+/, $_;
 	my $service = 4; # Service type is webmail by default
 
-	$service = 5 if ($cpanel[10] eq 'cpaneld:'); # Service type is cPanel if the log contains cpaneld:
+
+	if ($cpanel[10] eq 'cpaneld:') { # Service type is cPanel if the log contains cpaneld:
+		$service = 5;
+	} elsif ($cpanel[5] eq '[whostmgrd]') { # Service type is WHM if the log contains [whostmgrd]
+		$service = 9;
+		$cpanel[0] = $cpanel[5]; # Set the IP in the proper place
+		$cpanel[2] = $cpanel[7]; # Set the User in the proper place
+	}
 	$cpanel[2] = 'unknown' if $cpanel[2] =~ /\[/;
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
@@ -588,8 +597,8 @@ sub main {
 
 		if (defined($config{'watch_cpanel'}) && $config{'watch_cpanel'}) {
 			if ($_ =~ /FAILED LOGIN/ && ($_ =~ /webmaild:/ || $_ =~ /cpaneld:/)) { # This looks like cPanel/Webmail attack
-				logger ("calling cpanel_webmail_broot") if ($debug);
-				@block_results = cpanel_webmail_broot($_); # Pass it to the cpanel_webmail_broot parser and get the attacker's results
+				logger ("calling cpanel_broot") if ($debug);
+				@block_results = cpanel_broot($_); # Pass it to the cpanel_broot parser and get the attacker's results
 			}
 		}
 
@@ -827,7 +836,7 @@ In case of too many failed login attempts from a single IP address for certain p
 
 	- MONITOR THE LOGS
 
-	- pop_imap_broot(), ssh_broot(), ftp_broot(), cpanel_webmail_broot() - In case of hack attempt match, the control is passed to line parser for the given service.
+	- pop_imap_broot(), ssh_broot(), ftp_broot(), cpanel_broot() - In case of hack attempt match, the control is passed to line parser for the given service.
 
 	- is_local_ip() - Make sure that the IP of the attacker is not the local IP. We do not want to block localhosts.
 
@@ -975,7 +984,7 @@ In case of too many failed login attempts from a single IP address for certain p
 		returns failed attempt array, if detected a failed attempt in the log line.
 		otherwise, nothing
 
-=head2 pop_imap_broot() ssh_broot() ftp_broot() cpanel_webmail_broot() - The logs output parsers for the supported services
+=head2 pop_imap_broot() ssh_broot() ftp_broot() cpanel_broot() - The logs output parsers for the supported services
 
 	Input: $_ - The log line that looks like bruteforce attempt
 
@@ -991,6 +1000,8 @@ In case of too many failed login attempts from a single IP address for certain p
 			5 - cPanel
 			6 - DirectAdmin
 			7 - Postfix
+			8 - Dovecot
+			9 - WHM
 		$username - The username that failed to authenticate from that IP
 
 =head2 main() - NO HELP AVAIL :)
