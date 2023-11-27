@@ -86,8 +86,11 @@ fi
 
 # Initialize the Hawk SQLite DB
 if [ ! -f /var/cache/hawk/hawk.sqlite ]; then
+	if [ ! -d /var/cache/hawk ]; then
+		mkdir -p /var/cache/hawk
+	fi
 	sqlite3 /var/cache/hawk/hawk.sqlite < /usr/share/hawk/hawk_db.sqlite
-	chown hawk: /usr/share/hawk/hawk_db.sqlite
+	chown hawk: /var/cache/hawk/hawk.sqlite
 fi
 
 %preun
@@ -98,8 +101,11 @@ fi
 %postun
 %systemd_postun_with_restart hawk.service
 
-if getent passwd hawk > /dev/null; then
-	userdel -r hawk
+if [ "$1" == "0" ]; then
+	if getent passwd hawk > /dev/null; then
+		userdel -r hawk
+		groupdel hawk
+	fi
 fi
 
 %posttrans
