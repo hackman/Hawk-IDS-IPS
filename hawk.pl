@@ -19,7 +19,7 @@ my $sqlite_available=1;
 my $debug = 0;
 my $tail_pid = 0;
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '7.3';
+my $VERSION = '7.4';
 
 use lib '/usr/lib/hawk/';
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
