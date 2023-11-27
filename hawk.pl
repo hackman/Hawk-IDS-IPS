@@ -254,6 +254,8 @@ sub dovecot_broot {
 	#Aug 30 03:20:06 tester dovecot: pop3-login: Disconnected (auth failed, 1 attempts): user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected
 	#Aug 30 03:15:03 tester dovecot: pop3-login: user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14 Disconnected (auth failed, 1 attempts)
 	#Aug 30 03:15:21 tester dovecot: pop3-login: user=<dqdo>, method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected Disconnected (auth failed, 1 attempts)
+	#Nov 27 10:59:26 tester dovecot: pop3-login: Disconnected: Aborted login by logging out (auth failed, 1 attempts in 2 secs): user=<e.le@example.cx>, method=PLAIN, rip=185.117.82.70, lip=158.69.21.79, session=<NobHYiQLRJu5dVJG>
+
 	# Dovecot IMAP
 	#Aug 30 03:11:59 tester dovecot: imap-login: method=PLAIN, rip=87.118.135.130, lip=209.62.32.14 Disconnected (auth failed, 3 attempts)
 	#Aug 30 03:11:36 tester dovecot: imap-login: method=PLAIN, rip=87.118.135.130, lip=209.62.32.14, TLS: Disconnected Disconnected (auth failed, 2 attempts)
