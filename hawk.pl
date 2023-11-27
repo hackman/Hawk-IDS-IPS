@@ -19,7 +19,7 @@ my $sqlite_available=1;
 my $debug = 0;
 my $tail_pid = 0;
 $ENV{PATH} = '';		# remove unsecure path
-my $VERSION = '7.4';
+my $VERSION = '7.5';
 
 use lib '/usr/lib/hawk/';
 use POSIX qw(setsid), qw(strftime), qw(WNOHANG);
@@ -405,25 +405,31 @@ sub proftpd_broot {
 sub cpanel_broot {
 	#209.62.36.16 - webmail.1h216.com [07/17/2008:16:12:49 -0000] "GET / HTTP/1.1" FAILED LOGIN webmaild: user password hash is miss
 	#201.245.82.85 - khaoib [07/17/2008:19:56:36 -0000] "POST / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
+	#[2023-11-27 11:56:16 -0500] info [cpaneld] 185.117.82.70 - dd "GET / HTTP/1.1" FAILED LOGIN cpaneld: user name not provided or invalid user
 	#[2023-11-27 11:29:46 -0500] info [whostmgrd] 185.117.82.70 - dd "GET / HTTP/1.1" FAILED LOGIN whostmgrd: login attempt to whm by a non-reseller/root
 
 	my @cpanel = split /\s+/, $_;
 	my $service = 4; # Service type is webmail by default
-
+	my $ip = $cpanel[5];
+	my $user = $cpanel[2];
 
 	if ($cpanel[10] eq 'cpaneld:') { # Service type is cPanel if the log contains cpaneld:
 		$service = 5;
+		$user = $cpanel[7] if $cpanel[1] ne '-';
 	} elsif ($cpanel[5] eq '[whostmgrd]') { # Service type is WHM if the log contains [whostmgrd]
 		$service = 9;
-		$cpanel[0] = $cpanel[5]; # Set the IP in the proper place
-		$cpanel[2] = $cpanel[7]; # Set the User in the proper place
+		$user = $cpanel[7];
+	} else {
+		$ip = $cpanel[0];
 	}
-	$cpanel[2] = 'unknown' if $cpanel[2] =~ /\[/;
+	$user = 'unknown' if $user =~ /\[/;
+
 	# return ip, number of failed attempts, service under attack, failed username
 	# this is later stored to the failed_log table via store_to_db
 	# service id 4 -> webmail
 	# service id 5 -> cpanel
-	return ($cpanel[0], 1, $service, $cpanel[2]);
+	# service id 9 -> whm
+	return ($ip, 1, $service, $user);
 }
 
 sub da_broot {
