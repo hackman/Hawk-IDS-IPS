@@ -1,5 +1,5 @@
 Name:		hawk
-Version:	6.7
+Version:	7.4
 Release:	1
 Summary:	Hawk IDS/IPS
 License:	GPLv2
@@ -7,7 +7,7 @@ URL:		https://github.com/hackman/Hawk-IDS-IPS
 Source0:	%{name}-%{version}.tgz
 BuildArch:	noarch
 BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
-Requires:	perl perl-DBD-SQLite iptables iptables-services
+Requires:	perl perl-DBD-SQLite iptables iptables-services sqlite
 Provides:	hawk
 AutoReqProv: no
 
